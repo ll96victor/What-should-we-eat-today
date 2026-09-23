@@ -53,7 +53,29 @@ body.is-locked { overflow: hidden; }
 
 /* ---------- 头部 ---------- */
 
-.hero { text-align: center; padding: 8px 0 24px; }
+.hero { position: relative; text-align: center; padding: 8px 0 24px; }
+
+/* 设置入口：藏在标题右上角，明显但不跟主操作抢注意力 */
+.icon-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon-btn:hover { color: var(--brand); border-color: #e9cdb8; }
+.icon-btn:active { transform: scale(0.94); }
+.icon-btn:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
 
 .hero-title {
   margin: 0;
@@ -97,7 +119,14 @@ body.is-locked { overflow: hidden; }
   animation: card-in 0.32s ease backwards;
 }
 
-.card:nth-child(2) { animation-delay: 0.06s; }
+/* 每餐最多 8 道，逐个错开入场 */
+.card:nth-child(2) { animation-delay: 0.05s; }
+.card:nth-child(3) { animation-delay: 0.10s; }
+.card:nth-child(4) { animation-delay: 0.15s; }
+.card:nth-child(5) { animation-delay: 0.20s; }
+.card:nth-child(6) { animation-delay: 0.25s; }
+.card:nth-child(7) { animation-delay: 0.30s; }
+.card:nth-child(8) { animation-delay: 0.35s; }
 
 /* 入场动效只做位移、不做透明度：
    万一动画被系统中断（省电模式、后台标签页等），内容仍然完整可见，
@@ -490,6 +519,206 @@ body.is-locked { overflow: hidden; }
 .d-source a { color: var(--brand); text-decoration: none; }
 .d-source a:hover { text-decoration: underline; }
 .d-source p { margin: 0 0 6px; }
+
+/* ---------- 设置面板 ---------- */
+
+.s-title {
+  margin: 6px 0 6px;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.s-intro {
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.s-block { margin-bottom: 28px; }
+
+.s-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.s-label::before {
+  content: "";
+  width: 4px;
+  height: 15px;
+  border-radius: 2px;
+  background: var(--brand);
+}
+
+.s-help {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.s-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.s-err {
+  margin: 8px 0 0;
+  min-height: 18px;
+  font-size: 13px;
+  color: var(--brand-dark);
+}
+
+/* 数量选择：分段按钮 */
+.s-sizes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.s-size {
+  min-height: 52px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.s-size:hover { border-color: #e9cdb8; }
+.s-size:active { transform: scale(0.96); }
+.s-size:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+.s-size.is-active {
+  border-color: transparent;
+  background: linear-gradient(135deg, var(--brand), #f07a3f);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(226, 85, 43, 0.28);
+}
+
+/* 关键词输入 */
+.s-add {
+  display: flex;
+  gap: 8px;
+}
+
+.s-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;   /* 16px 以上 iOS 聚焦时不会自动放大页面 */
+}
+
+.s-input:focus {
+  outline: none;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(226, 85, 43, 0.14);
+}
+
+.s-add-btn {
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--brand);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.s-add-btn:hover { filter: brightness(1.06); }
+.s-add-btn:active { transform: scale(0.96); }
+.s-add-btn:focus-visible { outline: 3px solid var(--brand-dark); outline-offset: 2px; }
+
+/* 已屏蔽关键词 */
+.s-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.s-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 7px 6px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+/* 删除按钮保持 26px：既满足 WCAG 2.5.8 的 24px 最小触控目标，
+   又不至于大到让关键词标签显得笨重 */
+.s-chip-x {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f2e7dc;
+  color: var(--text-soft);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.s-chip-x:hover { background: var(--brand); color: #fff; }
+.s-chip-x:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+.s-empty {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.s-clear {
+  margin-top: 14px;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  font-family: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.s-clear:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+/* 边界说明：说清楚这个功能能做到什么、做不到什么 */
+.s-boundary {
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-soft);
+}
 
 /* 减少动画偏好 */
 @media (prefers-reduced-motion: reduce) {
