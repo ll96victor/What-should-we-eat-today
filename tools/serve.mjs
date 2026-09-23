@@ -59,7 +59,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`今晚吃什么 · 本地服务已启动`);
+  console.log(`今天吃什么 · 本地服务已启动`);
   console.log(`  打开：http://localhost:${PORT}`);
   console.log(`  目录：${ROOT}`);
   console.log('  按 Ctrl+C 停止');

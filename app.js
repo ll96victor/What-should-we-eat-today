@@ -1,5 +1,5 @@
 /* ============================================================
-   今晚吃什么 · 前端逻辑
+   今天吃什么 · 前端逻辑
    ------------------------------------------------------------
    打开页面 → 随机给出荤素搭配的一桌菜 → 不满意就换一组 → 点卡片看做法。
    首页默认只显示菜，保持极简。
@@ -270,7 +270,7 @@ function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch (e) {
-    console.warn('[今晚吃什么] 设置没能保存到本地：', e);
+    console.warn('[今天吃什么] 设置没能保存到本地：', e);
   }
 }
 
@@ -1357,7 +1357,7 @@ async function boot() {
 
     applyHealthToggle();
   } catch (err) {
-    console.error('[今晚吃什么] 数据加载失败：', err);
+    console.error('[今天吃什么] 数据加载失败：', err);
     renderNotice(
       '数据没加载成功',
       '请确认 <code>data/recipes.json</code> 与 <code>data/foods.json</code> 存在，'

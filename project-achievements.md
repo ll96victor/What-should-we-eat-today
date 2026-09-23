@@ -7,7 +7,7 @@
 
 ---
 
-## 成果 1 · 家庭晚餐决策工具（今晚吃什么 V1）
+## 成果 1 · 家庭晚餐决策工具（今天吃什么 V1）
 
 **时间**：2026-09-23
 **证据**：提交 `ac51f01` → `742ebbc`；线上 https://ll96victor.github.io/What-should-we-eat-today/
