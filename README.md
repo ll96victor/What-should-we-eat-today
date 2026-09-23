@@ -476,18 +476,24 @@ node tools/deploy-cloudbase.mjs <你的环境ID>         # 自动整理出干净
 `answers/` 等与站点无关的内容），再执行 `tcb hosting deploy dist / -e <环境ID>`。
 如果暂时不传环境 ID，它只准备 `dist/` 目录并提示后续命令。
 
-> **状态：未部署，没有任何 CloudBase 线上地址。**
+> **状态：✅ 已部署（2026-09-23）。**
 >
-> 本机装了 CloudBase CLI 2.12.2，但**没有登录态，也从未查到环境 ID**。
-> 反复执行 `tcb login` 只会在「请在浏览器中打开的授权页面进行授权…」这一步挂住直到超时，
-> 且**不打印任何可转交的授权链接或用户码**；CLI 2.12.2 提供的非交互方式只有
-> `--apiKeyId/--apiKey`（永久密钥），本项目不会索取你的密钥。
+> | 项 | 值 |
+> |---|---|
+> | 环境名称 | `what-should-we-eat` |
+> | 环境 ID | `what-should-we-eat-d0cym0b8ea64c` |
+> | 套餐 | 体验版 |
+> | 访问地址 | https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com |
+> | 部署命令 | `node tools/deploy-cloudbase.mjs what-should-we-eat-d0cym0b8ea64c` |
 >
-> **因此这一步卡在「需要你本人在浏览器里点一次授权」，脚本无法代办。**
-> 环境是否有、是否需要付费，也因为没有登录态而**至今无法确认**。
+> 只开了**静态网站托管**，没有数据库、云函数或任何后端资源。
+> 部署上去的就是仓库根目录的 8 个站点文件（`dist/` 里不含 `tools/`、`answers/`、`history/`、`.git/`）。
 >
-> 项目侧准备已经做完并验证过：`node tools/deploy-cloudbase.mjs` 能产出只含
-> 8 个站点文件、共 833 KB 的干净 `dist/`（不含 `tools/`、`answers/`、`history/`、`.git/`）。
+> **注意：默认测试域名会先显示一个「页面访问提示」警告页**（提示这是仅供开发测试的域名、
+> 内容未经审核），需要点「确定访问」才进入网站。这是 CloudBase 默认域名的固有行为，
+> 不是本站的问题；绑定已备案的自定义域名后不再出现。
+>
+> 部署方式：`tcb login` 在本机可正常完成（会自动打开授权页），登录后按上面的命令部署即可。
 
 ---
 

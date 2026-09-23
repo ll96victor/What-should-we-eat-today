@@ -308,7 +308,7 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 | 平台 | 状态 |
 |---|---|
 | GitHub Pages | ✅ 已部署：https://ll96victor.github.io/What-should-we-eat-today/ |
-| 腾讯云 CloudBase | ⛔ 未部署。卡在「需要账号持有人在浏览器里点一次授权」，本机无登录态、无环境 ID |
+| 腾讯云 CloudBase | ✅ 已部署（2026-09-23）：https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com<br>环境 `what-should-we-eat`（ID `what-should-we-eat-d0cym0b8ea64c`，体验版），只开静态网站托管 |
 
 ---
 
