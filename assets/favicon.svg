@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="今晚吃什么">
+  <rect width="64" height="64" rx="16" fill="#e2552b"/>
+  <path d="M13 33h38c0 10.5-8.5 19-19 19S13 43.5 13 33Z" fill="#fff"/>
+  <rect x="8" y="29" width="48" height="5" rx="2.5" fill="#fff"/>
+  <circle cx="31" cy="19" r="3.2" fill="#fff" opacity=".9"/>
+  <circle cx="42" cy="14" r="2.2" fill="#fff" opacity=".62"/>
+  <circle cx="21" cy="13" r="2" fill="#fff" opacity=".62"/>
+</svg>

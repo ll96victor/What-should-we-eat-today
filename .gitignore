@@ -1,0 +1,21 @@
+# 上游菜谱原文缓存（构建脚本按需重新拉取，不入库）
+tools/.cache/
+
+# CloudBase 部署时临时整理出的站点目录，可由脚本随时重建
+dist/
+
+# 依赖（本项目无运行时依赖，防止误装）
+node_modules/
+
+# Claude Code 在项目内生成的临时产物
+.claude/
+
+# 临时文件
+.tmpfiles/
+*.log
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
