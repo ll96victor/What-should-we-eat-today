@@ -51,7 +51,7 @@ What-should-we-eat-today/
 ├── nutrition.js          营养估算引擎（食材解析 + 汇总 + 健康公式），纯本地计算
 ├── data/
 │   ├── recipes.json      ★ 菜谱数据（唯一事实源，370 道）
-│   └── foods.json        ★ 食物营养表（120 条，溯源 USDA，见下文）
+│   └── foods.json        ★ 食物营养表（123 条，溯源 USDA，见下文）
 ├── assets/
 │   └── favicon.svg
 ├── tools/
@@ -261,7 +261,7 @@ What-should-we-eat-today/
 授权为 **CC0 1.0（公有领域贡献）**，可自由再分发。使用的是 SR Legacy（2018-04）与
 Foundation Foods（2026-04-30）两个数据集。
 
-**运行时完全不联网**：构建时下载 → 筛选出用到的 120 种食物 → 固化成本地
+**运行时完全不联网**：构建时下载 → 筛选出用到的 123 种食物 → 固化成本地
 `data/foods.json`（25 KB）。页面只读这份文件，不调用任何第三方接口（包括 USDA 自己的 API），
 所以国内网络直接可用。
 

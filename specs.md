@@ -1,9 +1,17 @@
-# 今晚吃什么 · 规格说明（specs）
+# 今天吃什么 · 规格说明（specs）
 
 > 本文件回答的是：**这个项目应该做什么、边界在哪。**
 > 不记录改了什么（见 Git 提交与 `answers/`），也不记录怎么做的（见 `answers/`）。
 >
-> 状态标记：✅ 已实现并自动验证 ｜ ⏳ 待用户真实验证 ｜ ⛔ 明确不做
+> 状态标记：✅ 已实现并自动验证 ｜ ⏳ 已实现但尚未经用户真实验收 ｜ ⛔ 明确不做
+>
+> **当前整体处于「已实现并自动验证、尚未经用户真实验收」的状态**：
+> 各轮均跑过自动化断言与真实页面实测，但**没有任何功能经过用户本人的真实使用验收**。
+> 因此下面的 ✅ 只代表「实现完成且自动化验证通过」，**不代表已被真实验收**。
+>
+> **关于项目名**：项目中文名是 **今天吃什么**。当前代码与界面里显示的仍是旧名
+> 「今晚吃什么」（页面标题、页头、README 标题）。这是**尚未执行的重命名**，
+> 不是两个项目；涉及命名时以「今天吃什么」为准。
 
 ---
 
@@ -245,7 +253,233 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 
 ---
 
-## 6. 设计原则
+## 6. 数据与接口契约
+
+> 上面 1–5 章回答「应该做什么、边界在哪」；这一章回答「**照着重构时，字段和函数长什么样**」。
+> 只写**跨实现必须一致**的事实（数据结构、字段名、枚举、函数输入输出），
+> 不写实现细节（怎么渲染、怎么组织 DOM 属于实现自由）。
+>
+> 换语言或换平台（例如后续微信小程序）时，这一章是必须原样继承的部分。
+
+### 6.1 本地存储
+
+| 项 | 值 |
+|---|---|
+| 存储介质 | `localStorage` |
+| 键名 | `what-should-we-eat-today.settings` |
+| 值 | 一个 JSON 对象（见下） |
+
+**完整结构与默认值**：
+
+```jsonc
+{
+  "mealSize": 2,                    // 每餐几道菜：2 / 4 / 6 / 8
+  "healthNutritionEnabled": false,  // 健康与营养总开关，默认关
+  "members": [],                    // 家庭成员数组，最多 8 位
+  "currentMealHouseholdSize": null, // 本次用餐人数 1–8；null = 跟随已启用成员数
+  "mealsPerDay": 3,                 // 每天通常吃几餐：2–6，只记录不参与计算
+  "blockedKeywords": [],            // 屏蔽关键词
+  "staple": {                       // 主食
+    "key": "rice-cooked",
+    "grams": null,                  // null = 按人数自动
+    "auto": true
+  }
+}
+```
+
+**成员对象**（`members[]` 的元素）：
+
+```jsonc
+{
+  "id": "member-xxxxx-1",     // 本地生成，稳定即可
+  "name": "我",                // 称呼，≤ 12 字
+  "gender": "male",           // male | female
+  "age": 30,                  // 10 – 100
+  "heightCm": 175,            // 80 – 230
+  "weightKg": 70,             // 25 – 200
+  "activityLevel": "sedentary", // sedentary | light | moderate | active
+  "dailyEnergyMode": "auto",  // auto（自动估算）| manual（自己设定）
+  "dailyEnergyManual": null,  // 仅 manual 时有值，500 – 8000
+  "enabled": true             // 停用的成员不计入默认用餐人数
+}
+```
+
+**读取容错（硬性）**：新增字段一律「读不到就用默认值」，**不做一次性迁移写入**。
+老版本数据缺少 `mealsPerDay` / `dailyEnergyMode` / `dailyEnergyManual` 时，
+分别回退为 `3` / `'auto'` / `null`，**不得因此丢弃整条成员记录**。
+
+### 6.2 `data/recipes.json`
+
+顶层：
+
+```jsonc
+{
+  "version": 1,
+  "generatedFrom": "https://github.com/Anduin2017/HowToCook",
+  "license": "Unlicense (上游 HowToCook 项目授权)",
+  "updatedAt": "2026-09-23",
+  "stats": { "total": 370, "protein": 188, "vegetable": 40, "byRole": { /* 见下 */ } },
+  "recipes": [ /* 菜谱数组 */ ]
+}
+```
+
+单条菜谱字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | string | 稳定 id，由上游文件路径派生（如 `htc-c289d37051`） |
+| `name` | string | 菜名 |
+| `menuRole` | string | **决定进哪个随机池**，见下方枚举 |
+| `category` | string | 上游原始分类（如 `vegetable_dish`），保留供扩展 |
+| `categoryName` | string | 分类中文名（如 `素菜`） |
+| `description` | string | 简介 |
+| `ingredients` | string[] | 食材用量原文，**解析营养的唯一输入** |
+| `steps` | string[] | 做法步骤 |
+| `tips` | string[] | 小贴士 |
+| `difficulty` | number \| null | 1–5 星 |
+| `calories` | number \| null | 上游自带值，**本项目不使用**（营养一律自己算） |
+| `imageUrl` | null | 预留字段，当前全部为 `null` |
+| `sourceName` / `sourceUrl` | string | 来源标注 |
+| `referenceName` / `referenceUrl` | string \| null | 上游标注的参考链接 |
+| `tags` | string[] | 标签 |
+
+**`menuRole` 完整枚举**（8 个取值，当前实测数量）：
+
+| menuRole | 数量 | 是否进随机池 |
+|---|---:|---|
+| `protein` | 188 | ✅ 荤菜池 |
+| `vegetable` | 40 | ✅ 素菜池 |
+| `staple` | 75 | ❌ |
+| `dessert` | 26 | ❌ |
+| `drink` | 23 | ❌ |
+| `condiment` | 10 | ❌ |
+| `breakfast` | 7 | ❌ |
+| `other` | 1 | ❌ |
+
+> 随机池只由 `protein` + `vegetable` 组成，**其余 6 类数据完整保留但不参与随机**。
+> 归入哪一类由 `tools/build-recipes.mjs` 里一张**人工复核的修正表**决定，
+> 不是按上游目录机械映射（鸡蛋、豆腐、豆类归 `protein`）。
+
+### 6.3 `data/foods.json`
+
+顶层：
+
+```jsonc
+{
+  "version": 1,
+  "source": { /* 溯源信息：USDA FDC / CC0 / 使用的数据集 / 抓取时间 */ },
+  "unitConversions": {
+    "byUnit":  { "根": 15, "瓣": 4, "斤": 500, "两": 50, "个": null /* 需逐个食材指定 */ },
+    "perItem": { "egg": 50, "tomato": 180, "bread": 35 }
+  },
+  "foods": [ /* 食物数组 */ ]
+}
+```
+
+单条食物字段：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `key` | string | 稳定键，主食选项与计算入口都用它 |
+| `names` | string[] | 中文别名列表，**匹配时按最长别名优先** |
+| `fdcId` | number | USDA FoodData Central 记录号（可逐条回溯） |
+| `usdaDescription` | string | USDA 原始英文描述，界面上作为出处展示 |
+| `per100g` | object | `{ kcal, protein, fat, carbs }`，每 100 g 可食部 |
+| `staple` | boolean | 省略即 `false`；标记为 `true` 的才出现在主食下拉里 |
+
+**当前实测**：`foods` 共 **123** 条，其中 `staple: true` 的 **10** 条——
+`rice-cooked`（米饭）、`rice-raw`（大米）、`brown-rice-cooked`（糙米饭）、
+`noodles-cooked`（面条）、`bread`（面包）、`mantou`（馒头）、`corn-cooked`（玉米）、
+`sweet-potato-cooked`（红薯）、`oats`（燕麦）、`millet-raw`（小米）。
+
+**按个数换算重量的优先级**：先查 `perItem[key]`（该食材的单重），
+查不到再退回 `byUnit[单位]`（通用单位重量）；`byUnit` 里为 `null` 的单位
+（如「个」「只」）**必须靠 `perItem` 提供**，否则该食材不换算、不猜。
+
+### 6.4 `nutrition.js` 公开接口
+
+重构时这些是**必须等价实现**的部分（函数名可改，语义不可改）。
+
+**别名索引与解析**
+
+```text
+buildIndex(foodsData)                    → { index: Map<别名, key>, aliasesByLength: string[], byKey: Map<key, food> }
+matchFood(text, index, aliasesByLength)  → foodKey | null      // 最长别名优先
+parseGrams(text, foodKey, unitConversions) → { grams, how } | null
+parseIngredient(text, foodIndex, unitConversions)
+                                         → { raw, foodKey, grams, status }
+                                           status: ok | no-food | vague | no-amount
+looksLikeNote(raw)                       → boolean   // 解释性文字，不计入覆盖率分母
+```
+
+**营养计算**
+
+```text
+nutritionOf(foodKey, grams, foodsData)   → { kcal, protein, fat, carbs } | null
+addNutri(a, b) / divNutri(a, n)          → 宏量对象
+estimateRecipe(recipe, foodIndex, unitConversions)
+    → { total, items, matched, totalCount, status, noteCount, fryingOil }
+      status: full（已估算）| partial（部分估算）| none（暂无完整估算，不给数字）
+summarizeMeal(recipes, staple, people)
+    → { total, perPerson, dishes, dishesWithData, dishesFull, hasStaple }
+```
+
+**健康参考**
+
+```text
+healthMetrics(member) → { bmi, bmiCategory, bmr, tdee, activity,
+                          proteinG, carbsLow, carbsHigh, fatLow, fatHigh } | null
+                        // null = 资料不全，不出结果也不猜
+bmiCategory(bmi)      → { label, hint }        // 中国成年人参考标准
+dailyEnergyReference(member, metrics)
+    → { mode, label, kcal, hasValue }          // manual 无值时 kcal 为 null，不回退自动值
+macroRanges(dailyEnergyKcal) → { carbsLow, carbsHigh, fatLow, fatHigh } | null
+```
+
+**校验、规范化与常量**
+
+```text
+validateMember(m)          → string | null   // null = 通过；否则返回给用户看的错误说明
+normalizeMealsPerDay(v)    → 2|3|4|5|6       // 不合法一律回退 3
+                               // 注意：数字字符串 '4' 按 4 接受（救回被手工改过的存储）
+
+MAX_MEMBERS = 8            NAME_MAX = 12
+MEMBER_LIMITS = { age: 10–100 岁, heightCm: 80–230 cm, weightKg: 25–200 kg }
+DAILY_ENERGY_LIMITS = { min: 500, max: 8000 }   // 仅技术防呆
+ENERGY_SOURCE = { auto: '自动估算', manual: '自己设定' }
+MEALS_PER_DAY_OPTIONS = [2, 3, 4, 5, 6]    MEALS_PER_DAY_DEFAULT = 3
+ACTIVITY_LEVELS = [
+  { key: 'sedentary', label: '久坐',   factor: 1.2   },
+  { key: 'light',     label: '轻度',   factor: 1.375 },
+  { key: 'moderate',  label: '中等',   factor: 1.55  },
+  { key: 'active',    label: '高活动', factor: 1.725 },
+]
+STATUS_TEXT = { full: '已估算', partial: '部分估算', none: '暂无完整估算' }
+DIET_REFERENCE  // 9 条常识性膳食参考（中国居民膳食指南的常识性条目），
+                // 与个人计算完全无关，纯静态展示
+```
+
+> **不属于契约的部分**：纯展示格式化函数（`fmt` 数字格式化、`coverageText` 覆盖率文案）
+> 允许各实现自行决定，只要界面上表达的含义一致即可。
+
+**校验的硬性边界**：`validateMember()` 中与每日能量有关的校验
+**必须严格限定在 `dailyEnergyMode === 'manual'` 分支内**。
+否则老版本成员（没有这两个字段）会被判为不合法，进而被整条丢弃。
+
+### 6.5 界面常量
+
+```text
+MENU_ROLES   = ['protein', 'vegetable']    // 随机池只取这两个，且始终 1:1
+MEAL_SIZES   = [2, 4, 6, 8]                // 每餐道数
+PEOPLE       = [1, 2, 3, 4, 5, 6, 7, 8]    // 用餐人数
+DEFAULT_DINERS = 2                         // 无任何成员时的默认用餐人数
+STAPLE_PER_PERSON = 150                    // 主食自动量：人数 × 150 g
+BLOCK_FIELDS = ['name', 'categoryName', 'description']  // 另加 ingredients、tags；不含 steps / tips
+```
+
+---
+
+## 7. 设计原则
 
 1. 不为未来可能的需求提前搭架构
 2. 营养数字只能来自数据或公式，不得由程序凭空生成
@@ -257,7 +491,7 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 
 ---
 
-## 7. 明确不做
+## 8. 明确不做
 
 微信小程序 · 手机端增删菜谱 · 数据库 · 登录注册 · 收藏 · 历史记录 ·
 智能推荐 · 食材库存 · 购物清单 · AI 推荐 · 家庭成员账号 · 多用户同步 ·
@@ -284,13 +518,13 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 
 ---
 
-## 8. 数据现状与已知局限
+## 9. 数据现状与已知局限
 
 | 项 | 现状 |
 |---|---|
 | 菜谱 | 370 道（上游 HowToCook 全量，Unlicense） |
 | 随机池 | 荤菜 188 道 / 素菜 40 道 |
-| 食物营养表 | 120 条（USDA FDC，CC0） |
+| 食物营养表 | 123 条（USDA FDC，CC0），其中 10 条标记为主食 |
 | 食材识别率 | 80.8% |
 | 菜谱营养覆盖 | 已估算 32.7% / 部分估算 63.2% / 无法估算 4.1% |
 
@@ -303,7 +537,7 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 
 ---
 
-## 9. 部署状态
+## 10. 部署状态
 
 | 平台 | 状态 |
 |---|---|
@@ -312,7 +546,7 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 
 ---
 
-## 10. V2 方向
+## 11. V2 方向
 
 ```text
 手机维护菜谱 → 收藏 → 历史菜单 → 近期不重复 → 偏好 → 微信小程序
