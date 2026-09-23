@@ -520,6 +520,174 @@ body.is-locked { overflow: hidden; }
 .d-source a:hover { text-decoration: underline; }
 .d-source p { margin: 0 0 6px; }
 
+/* ---------- 首页下半部分：主食 + 营养 ---------- */
+
+.panel {
+  margin-top: 22px;
+  padding: 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.panel-badge {
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.panel-badge--full { background: var(--veg-a); color: var(--veg-ink); }
+.panel-badge--partial { background: #fdefd7; color: #96631a; }
+.panel-badge--none { background: var(--line); color: var(--text-soft); }
+
+/* 主食 */
+.staple-row { display: flex; gap: 10px; align-items: stretch; }
+
+.s-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+}
+
+.s-select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(226, 85, 43, 0.14); }
+.s-select--sm { min-height: 42px; font-size: 15px; }
+
+.staple-input-wrap { position: relative; flex: 0 0 106px; display: flex; }
+
+.staple-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 30px 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.staple-input:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(226, 85, 43, 0.14); }
+.staple-input::-webkit-outer-spin-button,
+.staple-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.staple-input { -moz-appearance: textfield; appearance: textfield; }
+
+.staple-unit {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-soft);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+.staple-note { margin: 10px 0 0; font-size: 12.5px; color: var(--text-soft); line-height: 1.6; }
+
+/* 本餐营养 */
+.ng-head {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12.5px;
+  color: var(--text-soft);
+}
+
+.ng-head span:last-child { text-align: right; }
+
+.ng-body { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+.ng-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bg);
+}
+
+.ng-col--hl { background: linear-gradient(135deg, #fff3e9, #ffe7d5); }
+
+.ng-kcal { font-size: 24px; font-weight: 700; line-height: 1.15; }
+.ng-kcal i { margin-left: 3px; font-size: 12px; font-style: normal; font-weight: 500; color: var(--text-soft); }
+.ng-sub { font-size: 13px; color: #5b4d46; }
+
+.panel-foot { margin: 12px 0 0; font-size: 12.5px; line-height: 1.65; color: var(--text-soft); }
+
+/* 卡片上的热量提示 */
+.card-side {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.card-kcal { font-size: 12px; color: var(--text-soft); white-space: nowrap; }
+
+/* 详情页营养块 */
+.nutri-box {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.nutri-scope { margin: 0 0 6px; font-size: 12.5px; color: var(--text-soft); }
+.nutri-kcal { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.15; }
+.nutri-kcal span { margin-left: 4px; font-size: 13px; font-weight: 500; color: var(--text-soft); }
+
+.nutri-macros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+}
+
+.nutri-macros li { display: flex; gap: 6px; }
+.nutri-macros span { color: var(--text-soft); }
+.nutri-macros b { font-weight: 700; }
+
+.nutri-cov { margin: 12px 0 0; font-size: 12.5px; line-height: 1.7; color: var(--text-soft); }
+
+.nutri-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.nutri-tag--full { background: var(--veg-a); color: var(--veg-ink); }
+.nutri-tag--partial { background: #fdefd7; color: #96631a; }
+.nutri-tag--none { background: var(--line); color: var(--text-soft); }
+
+.nutri-none { margin: 0; font-size: 14px; color: var(--text-soft); }
+
 /* ---------- 设置面板 ---------- */
 
 .s-title {
@@ -709,6 +877,64 @@ body.is-locked { overflow: hidden; }
 }
 
 .s-clear:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+/* 人数：8 个选项，两行四列 */
+.s-sizes--8 { grid-template-columns: repeat(4, 1fr); }
+.s-sizes--8 .s-size { min-height: 48px; font-size: 17px; }
+
+/* ---------- 健康参考 ---------- */
+
+.hp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.hp-field { display: flex; flex-direction: column; gap: 5px; }
+.hp-field--wide { grid-column: 1 / -1; }
+.hp-label { font-size: 12.5px; color: var(--text-soft); }
+.hp-field .staple-input { text-align: left; padding-right: 12px; font-weight: 500; }
+.hp-field .staple-input-wrap { flex: none; }
+
+.hp-out { margin-top: 14px; }
+
+.hp-result {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.hp-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px dashed var(--line);
+  font-size: 13.5px;
+}
+
+.hp-line:last-child { border-bottom: 0; }
+.hp-line > span { flex: 0 0 92px; color: var(--text-soft); }
+.hp-line > b { font-size: 16px; font-weight: 700; }
+.hp-line > em { font-style: normal; font-size: 12px; color: var(--text-soft); }
+
+.hp-caveat { margin: 10px 0 0; font-size: 12.5px; color: var(--text-soft); }
+
+/* 日常饮食参考 */
+.diet-list { margin: 0; padding: 0; list-style: none; font-size: 13.5px; }
+
+.diet-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.diet-list li:last-child { border-bottom: 0; }
+.diet-list span { color: #5b4d46; }
+.diet-list b { font-weight: 600; color: var(--text); white-space: nowrap; }
 
 /* 边界说明：说清楚这个功能能做到什么、做不到什么 */
 .s-boundary {

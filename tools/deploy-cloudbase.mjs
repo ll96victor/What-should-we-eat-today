@@ -24,7 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = path.join(ROOT, 'dist');
 
 /** 真正需要发到线上的内容 */
-const SITE_FILES = ['index.html', 'styles.css', 'app.js', '.nojekyll'];
+const SITE_FILES = ['index.html', 'styles.css', 'app.js', 'nutrition.js', '.nojekyll'];
 const SITE_DIRS = ['data', 'assets'];
 
 const envId = process.argv[2];

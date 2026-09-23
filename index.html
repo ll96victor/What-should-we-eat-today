@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#e2552b">
-  <meta name="description" content="今晚吃什么：荤素搭配的随机家常菜单，不满意就换一组，点开看做法。">
+  <meta name="description" content="今晚吃什么：荤素搭配的随机家常菜单，附带营养估算，不满意就换一组，点开看做法。">
   <title>今晚吃什么</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -33,6 +33,28 @@
       </button>
       <p class="hint" id="hint"></p>
     </div>
+
+    <section class="panel" id="staple-panel" hidden>
+      <h2 class="panel-title">主食</h2>
+      <div class="staple-row">
+        <select class="s-select" id="staple-select" aria-label="选择主食"></select>
+        <span class="staple-input-wrap">
+          <input class="staple-input" id="staple-amount" type="number" inputmode="numeric"
+            min="0" max="5000" step="50" aria-label="主食总重量，单位克">
+          <span class="staple-unit">g</span>
+        </span>
+      </div>
+      <p class="staple-note" id="staple-note"></p>
+    </section>
+
+    <section class="panel" id="nutrition-panel" hidden>
+      <h2 class="panel-title">
+        本餐营养估算
+        <span class="panel-badge" id="meal-status"></span>
+      </h2>
+      <div class="nutri-grid" id="meal-nutri"></div>
+      <p class="panel-foot" id="meal-foot"></p>
+    </section>
   </div>
 
   <div class="sheet" id="detail" hidden>
@@ -61,6 +83,12 @@
         <p class="s-intro">改动即时生效，并记在这台设备的浏览器里。</p>
 
         <section class="s-block">
+          <h3 class="s-label">用餐人数</h3>
+          <div class="s-sizes s-sizes--8" id="people-group" role="radiogroup" aria-label="用餐人数"></div>
+          <p class="s-note" id="people-note"></p>
+        </section>
+
+        <section class="s-block">
           <h3 class="s-label">每餐菜品数量</h3>
           <div class="s-sizes" id="size-group" role="radiogroup" aria-label="每餐菜品数量"></div>
           <p class="s-note" id="size-note"></p>
@@ -80,8 +108,50 @@
           <button class="s-clear" id="kw-clear" type="button" hidden>清空全部</button>
         </section>
 
+        <section class="s-block">
+          <h3 class="s-label">健康参考</h3>
+          <p class="s-help">选填。只用于在下面算出粗略的个人参考值，不会上传。</p>
+          <div class="hp-grid">
+            <label class="hp-field">
+              <span class="hp-label">性别</span>
+              <select class="s-select s-select--sm" id="hp-sex">
+                <option value="male">男</option>
+                <option value="female">女</option>
+              </select>
+            </label>
+            <label class="hp-field">
+              <span class="hp-label">年龄</span>
+              <input class="staple-input" id="hp-age" type="number" inputmode="numeric" min="10" max="100" placeholder="岁">
+            </label>
+            <label class="hp-field">
+              <span class="hp-label">身高</span>
+              <input class="staple-input" id="hp-height" type="number" inputmode="numeric" min="100" max="230" placeholder="cm">
+            </label>
+            <label class="hp-field">
+              <span class="hp-label">体重</span>
+              <input class="staple-input" id="hp-weight" type="number" inputmode="decimal" min="25" max="200" placeholder="kg">
+            </label>
+            <label class="hp-field hp-field--wide">
+              <span class="hp-label">活动水平</span>
+              <select class="s-select" id="hp-activity"></select>
+            </label>
+          </div>
+          <div class="hp-out" id="hp-out"></div>
+          <p class="s-note" id="hp-hint"></p>
+        </section>
+
+        <section class="s-block">
+          <h3 class="s-label">日常饮食参考</h3>
+          <p class="s-help">普通成年人每天的常识性建议，和上面的个人计算是两回事。</p>
+          <ul class="diet-list" id="diet-list"></ul>
+        </section>
+
         <p class="s-boundary">
           屏蔽按菜谱文字做关键词匹配，只用来减少推荐；不能替代对实际食材和交叉接触风险的人工确认。
+        </p>
+        <p class="s-boundary">
+          营养与健康数值均为粗略估算，仅供日常参考，不构成医疗建议、诊断或处方；
+          有疾病、孕期哺乳期或特殊饮食需求请咨询医生或注册营养师。
         </p>
       </div>
     </div>

@@ -1,0 +1,334 @@
+/* ============================================================
+   营养估算引擎
+   ------------------------------------------------------------
+   设计原则：**营养数字只来自数据或公式，不由程序凭空生成。**
+
+   - 每个食材的营养值来自 data/foods.json（溯源自 USDA FoodData Central，CC0）
+   - 健康指标（BMI / BMR / TDEE）来自明确的公开公式
+   - 无法确定重量的食材一律标记为「未能识别」，计入覆盖率，绝不猜
+
+   本模块不发起任何网络请求，纯粹基于本地数据进行计算。
+   ============================================================ */
+
+/** 中文数字 -> 阿拉伯数字（食材用量里常出现） */
+const CN_NUM = { 半: 0.5, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10 };
+
+/** 明确表示重量的单位及其到克的换算 */
+const WEIGHT_UNITS = {
+  g: 1, 克: 1, 公克: 1,
+  kg: 1000, 千克: 1000, 公斤: 1000,
+  // 毫升按 1 g/ml 处理（水）。油类实际密度约 0.92，会略微高估油的热量，
+  // 这是有意的保守取舍：宁可略微高估，也不低估。
+  ml: 1, 毫升: 1, cc: 1,
+  l: 1000, 升: 1000,
+};
+
+/** 模糊量词：出现这些且没有明确数字时，判为无法识别，不猜重量 */
+const VAGUE_RE = /适量|少许|少量|若干|按需|酌情|随意|看个人|根据个人|自备|视情况|凭感觉/;
+
+/**
+ * 上游数据里有少量条目其实不是食材，而是解释性文字
+ * （例如「水的体积是米饭的体积的 9-12 倍。」）。
+ * 这类条目会被排除出覆盖率分母——它们本来就不是食材，
+ * 算进「未识别食材」会低报覆盖率，对用户不诚实。
+ */
+const NOTE_RE = /容量|体积|可以食用|能够食用|的倍数|分钟|足够一人|个人经验|玻璃|陶瓷容器|密封容器/;
+
+export function looksLikeNote(raw) {
+  return NOTE_RE.test(String(raw));
+}
+
+/**
+ * 油炸用油：用量远超一顿饭的实际摄入。
+ * 一整锅油不可能被吃掉，全额计入会算出「一道菜两万大卡」这种离谱结果。
+ * 超过阈值的油不计入营养，并把这道菜标成「部分估算」，
+ * 宁可略微低估，也不能给出一个明显错误的数字。
+ */
+const OIL_KEYS = new Set(['oil', 'olive-oil', 'sesame-oil', 'lard']);
+const OIL_AS_FRYING_MEDIUM_G = 150;
+
+/** 把一段文本里的中文数字统一成阿拉伯数字 */
+function normalizeNumbers(text) {
+  return text.replace(/[半一二两三四五六七八九十]/g, (c) => String(CN_NUM[c]));
+}
+
+/**
+ * 从用量文本里解析出克数。
+ * 优先取明确重量，其次按「个数单位 × 单重」折算。
+ * @returns {{grams: number, how: string} | null}
+ */
+export function parseGrams(text, foodKey, unitConversions) {
+  const t = normalizeNumbers(String(text));
+
+  const WEIGHT_ALT = '千克|公斤|kg|公克|克|g|毫升|ml|cc|升|l';
+  const COUNT_ALT = '个|只|根|瓣|颗|片|段|条|块|把|支|张|听|罐|包|袋|勺|汤匙|茶匙|碗|杯|斤|两';
+
+  /** 个数单位的单重：先按食材细分，再退回通用单位 */
+  const unitWeight = (unit) => {
+    const perItem = unitConversions.perItem[foodKey];
+    if (perItem) return perItem;
+    return unitConversions.byUnit[unit] ?? null;
+  };
+
+  // 1) 明确重量 + 区间（取中值，例如「10-15 g」按 12.5 g）
+  let m = t.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*[-~～至]\\s*(\\d+(?:\\.\\d+)?)\\s*(${WEIGHT_ALT})(?![a-zA-Z])`, 'i'));
+  if (m) {
+    const unit = WEIGHT_UNITS[m[3].toLowerCase()] ?? WEIGHT_UNITS[m[3]] ?? 1;
+    return { grams: ((parseFloat(m[1]) + parseFloat(m[2])) / 2) * unit, how: 'weight-range' };
+  }
+
+  // 2) 明确重量 + 单值
+  m = t.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${WEIGHT_ALT})(?![a-zA-Z])`, 'i'));
+  if (m) {
+    const unit = WEIGHT_UNITS[m[2].toLowerCase()] ?? WEIGHT_UNITS[m[2]] ?? 1;
+    return { grams: parseFloat(m[1]) * unit, how: 'weight' };
+  }
+
+  // 3) 个数单位 + 区间（「3~4 斤」这类，同样取中值，不能只取上限）
+  m = t.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*[-~～至]\\s*(\\d+(?:\\.\\d+)?)\\s*(${COUNT_ALT})`));
+  if (m) {
+    const w = unitWeight(m[3]);
+    if (w) return { grams: ((parseFloat(m[1]) + parseFloat(m[2])) / 2) * w, how: 'count-range' };
+  }
+
+  // 4) 个数单位 + 单值
+  m = t.match(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${COUNT_ALT})`));
+  if (m) {
+    const w = unitWeight(m[2]);
+    if (w) return { grams: parseFloat(m[1]) * w, how: 'count' };
+  }
+
+  return null;
+}
+
+/**
+ * 在食材文本里认出是哪一种食物。
+ * 用「最长别名优先」，避免「老豆腐」被「豆腐」抢先匹配。
+ * @returns {string | null} 食物 key
+ */
+export function matchFood(text, index, aliasesByLength) {
+  const t = String(text);
+  for (const alias of aliasesByLength) {
+    if (t.includes(alias)) return index.get(alias);
+  }
+  return null;
+}
+
+/** 建立别名索引；按长度降序，保证最长匹配优先 */
+export function buildIndex(foodsData) {
+  const index = new Map();
+  for (const f of foodsData.foods) {
+    for (const n of f.names) index.set(n, f.key);
+  }
+  const aliasesByLength = [...index.keys()].sort((a, b) => b.length - a.length);
+  return { index, aliasesByLength, byKey: new Map(foodsData.foods.map((f) => [f.key, f])) };
+}
+
+/**
+ * 解析单条食材。
+ * @returns {{raw, foodKey, grams, status}} status: ok | no-food | no-amount
+ */
+export function parseIngredient(text, foodIndex, unitConversions) {
+  const foodKey = matchFood(text, foodIndex.index, foodIndex.aliasesByLength);
+  if (!foodKey) return { raw: text, foodKey: null, grams: 0, status: 'no-food' };
+
+  const g = parseGrams(text, foodKey, unitConversions);
+  if (!g || !(g.grams > 0)) {
+    // 有明确模糊量词的，说明确实无从判断；没有数字的同样如此
+    return { raw: text, foodKey, grams: 0, status: VAGUE_RE.test(text) ? 'vague' : 'no-amount' };
+  }
+  // 单条食材重量上限做个保护，避免「份数」之类被误读成克数
+  if (g.grams > 5000) return { raw: text, foodKey, grams: 0, status: 'no-amount' };
+  return { raw: text, foodKey, grams: g.grams, status: 'ok' };
+}
+
+/** 按克数算营养 */
+export function nutritionOf(foodKey, grams, foodsData) {
+  const food = foodsData.byKey.get(foodKey);
+  if (!food) return null;
+  const k = grams / 100;
+  return {
+    kcal: food.per100g.kcal * k,
+    protein: food.per100g.protein * k,
+    fat: food.per100g.fat * k,
+    carbs: food.per100g.carbs * k,
+  };
+}
+
+const ZERO = { kcal: 0, protein: 0, fat: 0, carbs: 0 };
+
+export function addNutri(a, b) {
+  return {
+    kcal: a.kcal + b.kcal,
+    protein: a.protein + b.protein,
+    fat: a.fat + b.fat,
+    carbs: a.carbs + b.carbs,
+  };
+}
+
+export function divNutri(a, n) {
+  if (!(n > 0)) return { ...ZERO };
+  return { kcal: a.kcal / n, protein: a.protein / n, fat: a.fat / n, carbs: a.carbs / n };
+}
+
+/**
+ * 估算一道菜的营养。
+ * 只累加能识别出重量的食材；其余全部计入 coverage，供界面如实展示。
+ * @returns {{total, items, matched, totalCount, status}} status: full | partial | none
+ */
+export function estimateRecipe(recipe, foodIndex, unitConversions) {
+  const items = [];
+  let noteCount = 0;
+  let fryingOil = 0;
+
+  for (const raw of recipe.ingredients) {
+    // 不是食材的解释性文字：不参与营养，也不算进覆盖率分母
+    if (looksLikeNote(raw)) { noteCount++; continue; }
+
+    const p = parseIngredient(raw, foodIndex, unitConversions);
+    if (p.status !== 'ok') {
+      items.push({ ...p, nutri: null });
+      continue;
+    }
+
+    // 一整锅油炸用油不可能被吃完，不计入；标出来让界面如实说明
+    if (OIL_KEYS.has(p.foodKey) && p.grams > OIL_AS_FRYING_MEDIUM_G) {
+      fryingOil++;
+      items.push({ ...p, status: 'frying-oil', nutri: null });
+      continue;
+    }
+
+    items.push({ ...p, nutri: nutritionOf(p.foodKey, p.grams, foodIndex) });
+  }
+
+  const totalCount = items.length;
+  const matched = items.filter((i) => i.nutri).length;
+  let total = { ...ZERO };
+  for (const i of items) if (i.nutri) total = addNutri(total, i.nutri);
+
+  const status = matched === 0 ? 'none' : matched === totalCount ? 'full' : 'partial';
+
+  return { total, items, matched, totalCount, status, noteCount, fryingOil };
+}
+
+/**
+ * 汇总一餐。
+ * @param recipes 估算好的菜品数组 [{recipe, est}]
+ * @param staple  {key, grams, nutri} | null
+ * @param people  用餐人数
+ */
+export function summarizeMeal(recipes, staple, people) {
+  let total = { ...ZERO };
+  let matchedDishes = 0;
+  let fullDishes = 0;
+  let countedDishes = 0;
+
+  for (const { est } of recipes) {
+    countedDishes++;
+    if (est.status === 'full') fullDishes++;
+    if (est.status !== 'none') matchedDishes++;
+    total = addNutri(total, est.total);
+  }
+  if (staple && staple.nutri) total = addNutri(total, staple.nutri);
+
+  return {
+    total,
+    perPerson: divNutri(total, people),
+    dishes: countedDishes,
+    dishesWithData: matchedDishes,
+    dishesFull: fullDishes,
+    hasStaple: !!(staple && staple.nutri),
+  };
+}
+
+// ==================================================================
+// 健康参考：全部来自公开公式，不涉及任何推测
+// ==================================================================
+
+/** BMI 分级（中国成年人参考标准） */
+export function bmiCategory(bmi) {
+  if (bmi < 18.5) return { label: '偏瘦', hint: '低于 18.5' };
+  if (bmi < 24) return { label: '正常', hint: '18.5 – 23.9' };
+  if (bmi < 28) return { label: '超重', hint: '24.0 – 27.9' };
+  return { label: '肥胖', hint: '≥ 28.0' };
+}
+
+export const ACTIVITY_LEVELS = [
+  { key: 'sedentary', label: '久坐', factor: 1.2, hint: '几乎不运动，以久坐为主' },
+  { key: 'light', label: '轻度', factor: 1.375, hint: '每周轻度运动 1–3 次' },
+  { key: 'moderate', label: '中等', factor: 1.55, hint: '每周中等强度运动 3–5 次' },
+  { key: 'active', label: '高活动', factor: 1.725, hint: '每周高强度运动 6–7 次' },
+];
+
+/**
+ * 由个人资料算出各项参考值。
+ * BMI  = 体重 / 身高²
+ * BMR  = Mifflin-St Jeor
+ * TDEE = BMR × 活动系数
+ * @returns null 表示资料不完整
+ */
+export function healthMetrics(profile) {
+  const age = Number(profile?.age);
+  const height = Number(profile?.height);
+  const weight = Number(profile?.weight);
+  const sex = profile?.sex;
+  const activity = ACTIVITY_LEVELS.find((a) => a.key === profile?.activity);
+
+  if (!(age > 0 && height > 0 && weight > 0) || !sex || !activity) return null;
+
+  const m = height / 100;
+  const bmi = weight / (m * m);
+
+  // Mifflin-St Jeor
+  const bmr = 10 * weight + 6.25 * height - 5 * age + (sex === 'male' ? 5 : -161);
+  const tdee = bmr * activity.factor;
+
+  return {
+    bmi,
+    bmiCategory: bmiCategory(bmi),
+    bmr,
+    tdee,
+    activity,
+    // 蛋白质：普通成年人约 0.8 g/kg/天
+    proteinG: 0.8 * weight,
+    // 碳水 45%–65% 总能量；1 g 碳水 ≈ 4 kcal
+    carbsLow: (tdee * 0.45) / 4,
+    carbsHigh: (tdee * 0.65) / 4,
+    // 脂肪 20%–35% 总能量；1 g 脂肪 ≈ 9 kcal
+    fatLow: (tdee * 0.2) / 9,
+    fatHigh: (tdee * 0.35) / 9,
+  };
+}
+
+/** 普通成年人日常膳食参考（中国居民膳食指南的常识性条目，非个人化处方） */
+export const DIET_REFERENCE = [
+  { item: '新鲜蔬菜', amount: '300 – 500 g' },
+  { item: '水果', amount: '200 – 350 g' },
+  { item: '谷物', amount: '200 – 300 g' },
+  { item: '全谷物 / 杂豆', amount: '50 – 150 g' },
+  { item: '奶及奶制品', amount: '300 ml 以上' },
+  { item: '鱼、禽、蛋、瘦肉', amount: '120 – 200 g' },
+  { item: '烹调油', amount: '25 – 30 g' },
+  { item: '盐', amount: '不超过 5 g' },
+  { item: '添加糖', amount: '不超过 50 g，最好 25 g 以下' },
+];
+
+// ==================================================================
+// 展示格式化
+// ==================================================================
+
+export function fmt(n, digits = 0) {
+  if (!Number.isFinite(n)) return '—';
+  return n.toFixed(digits);
+}
+
+/** 覆盖率文案：只说清事实，不夸大精度 */
+export function coverageText(matched, total) {
+  return `已识别 ${matched} / ${total} 项食材`;
+}
+
+export const STATUS_TEXT = {
+  full: '已估算',
+  partial: '部分估算',
+  none: '暂无完整估算',
+};

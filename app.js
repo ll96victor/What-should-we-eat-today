@@ -2,73 +2,80 @@
    今晚吃什么 · 前端逻辑
    ------------------------------------------------------------
    打开页面 → 随机给出荤素搭配的一桌菜 → 不满意就换一组 → 点卡片看做法。
-   每餐数量与屏蔽关键词记在浏览器 localStorage 里，刷新和重开都不丢。
-   数据全部来自本地 data/recipes.json，不请求任何第三方接口。
+   可以设置用餐人数、每餐菜品数量、屏蔽关键词，并看到粗略的营养估算。
+   全部设置存在浏览器本地，不上传、不需要账号。
+
+   数据与计算全部在本地完成，运行时不请求任何第三方接口。
    ============================================================ */
 
-const DATA_URL = 'data/recipes.json';
+import {
+  buildIndex, estimateRecipe, nutritionOf, summarizeMeal,
+  healthMetrics, ACTIVITY_LEVELS, DIET_REFERENCE,
+  STATUS_TEXT, coverageText, fmt,
+} from './nutrition.js';
+
+const RECIPES_URL = 'data/recipes.json';
+const FOODS_URL = 'data/foods.json';
 
 /** 随机菜单只从这两个池子里取菜，且始终 1:1 搭配 */
 const MENU_ROLES = ['protein', 'vegetable'];
 
 const ROLE_EMOJI = { protein: '🍖', vegetable: '🥬' };
-
-/** 这道菜在菜单里扮演的角色。用词和产品对外的说法保持一致。 */
 const ROLE_LABEL = { protein: '荤菜', vegetable: '素菜' };
 
 /** 每餐菜品数量的可选值（荤素 1:1，所以每边各一半） */
 const MEAL_SIZES = [2, 4, 6, 8];
+/** 用餐人数可选值 */
+const PEOPLE = [1, 2, 3, 4, 5, 6, 7, 8];
+/** 每人默认主食量（克，熟重） */
+const STAPLE_PER_PERSON = 150;
 
-/** 首页副标题文案，键是每一边的菜数 */
 const MENU_PHRASE = { 1: '一荤一素', 2: '两荤两素', 3: '三荤三素', 4: '四荤四素' };
 
 const SETTINGS_KEY = 'what-should-we-eat-today.settings';
-const DEFAULT_SETTINGS = { mealSize: 2, blockedKeywords: [] };
+const DEFAULT_SETTINGS = {
+  mealSize: 2,
+  householdSize: 2,
+  blockedKeywords: [],
+  healthProfile: { sex: 'male', age: '', height: '', weight: '', activity: 'sedentary' },
+  staple: { key: 'rice-cooked', grams: null, auto: true },
+};
 
 /** 屏蔽关键词在哪些字段里查找（都是能描述「这道菜是什么」的字段） */
 const BLOCK_FIELDS = ['name', 'categoryName', 'description'];
 
 const state = {
-  /** @type {Record<string, object[]>} 全部菜谱，按 menuRole 分池 */
   pools: { protein: [], vegetable: [] },
-  /** @type {Record<string, object[]>} 剔除被屏蔽的菜之后，真正可用的池子 */
   available: { protein: [], vegetable: [] },
-  /** @type {object[] | null} 当前这一桌菜（荤菜在前、素菜在后） */
   current: null,
   total: 0,
   blocked: 0,
+  foodIndex: null,
+  foodsData: null,
+  estimates: [],
+  summary: null,
 };
 
-const el = {
-  heroSub: document.getElementById('hero-sub'),
-  menu: document.getElementById('menu'),
-  reroll: document.getElementById('reroll'),
-  hint: document.getElementById('hint'),
-  detail: document.getElementById('detail'),
-  detailBody: document.getElementById('detail-body'),
-  detailClose: document.getElementById('detail-close'),
-  detailChip: document.getElementById('detail-chip'),
-  settings: document.getElementById('settings'),
-  settingsBody: document.getElementById('settings-body'),
-  settingsOpen: document.getElementById('settings-open'),
-  settingsClose: document.getElementById('settings-close'),
-  sizeGroup: document.getElementById('size-group'),
-  sizeNote: document.getElementById('size-note'),
-  kwForm: document.getElementById('kw-form'),
-  kwInput: document.getElementById('kw-input'),
-  kwList: document.getElementById('kw-list'),
-  kwClear: document.getElementById('kw-clear'),
-  kwErr: document.getElementById('kw-err'),
-};
+const el = {};
+for (const id of [
+  'hero-sub', 'menu', 'reroll', 'hint', 'detail', 'detail-body', 'detail-close', 'detail-chip',
+  'settings', 'settings-body', 'settings-open', 'settings-close',
+  'size-group', 'size-note', 'people-group', 'people-note',
+  'kw-form', 'kw-input', 'kw-list', 'kw-clear', 'kw-err',
+  'staple-panel', 'staple-select', 'staple-amount', 'staple-note',
+  'nutrition-panel', 'meal-nutri', 'meal-foot', 'meal-status',
+  'hp-sex', 'hp-age', 'hp-height', 'hp-weight', 'hp-activity', 'hp-out', 'hp-hint',
+  'diet-list',
+]) {
+  el[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = document.getElementById(id);
+}
 
-/** 关闭面板后把焦点还回去 */
 let lastFocused = null;
 
 // ------------------------------------------------------------------
 // 小工具
 // ------------------------------------------------------------------
 
-/** 转义，避免菜谱文本里的特殊字符破坏页面结构 */
 function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -79,51 +86,82 @@ function randomOf(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-/** 角色的展示名：没在图例里的角色就退回原始分类名 */
 function roleLabel(recipe) {
   return ROLE_LABEL[recipe.menuRole] || recipe.categoryName;
 }
 
-/** 次级分类标签。和角色名重复时（例如「素菜 / 素菜」）就不显示，避免啰嗦。 */
 function categoryTag(recipe) {
   if (roleLabel(recipe) === recipe.categoryName) return '';
   return `<span class="card-cat">${esc(recipe.categoryName)}</span>`;
 }
 
 // ------------------------------------------------------------------
-// 设置：读写 localStorage
+// 设置读写
 // ------------------------------------------------------------------
 
-/** 读设置。localStorage 不可用（隐私模式等）时退回默认值，不影响主流程。 */
 function loadSettings() {
+  const base = {
+    ...DEFAULT_SETTINGS,
+    blockedKeywords: [],
+    healthProfile: { ...DEFAULT_SETTINGS.healthProfile },
+    staple: { ...DEFAULT_SETTINGS.staple },
+  };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return { ...DEFAULT_SETTINGS, blockedKeywords: [] };
-    const saved = JSON.parse(raw);
-    const size = Number(saved?.mealSize);
-    const keywords = Array.isArray(saved?.blockedKeywords)
-      ? saved.blockedKeywords.filter((k) => typeof k === 'string' && k.trim())
-        .map((k) => k.trim())
-      : [];
-    return {
-      mealSize: MEAL_SIZES.includes(size) ? size : DEFAULT_SETTINGS.mealSize,
-      blockedKeywords: dedupeKeywords(keywords),
-    };
+    if (!raw) return base;
+    const s = JSON.parse(raw);
+
+    const mealSize = Number(s?.mealSize);
+    if (MEAL_SIZES.includes(mealSize)) base.mealSize = mealSize;
+
+    const people = Number(s?.householdSize);
+    if (PEOPLE.includes(people)) base.householdSize = people;
+
+    if (Array.isArray(s?.blockedKeywords)) {
+      base.blockedKeywords = dedupeKeywords(
+        s.blockedKeywords.filter((k) => typeof k === 'string' && k.trim()).map((k) => k.trim()),
+      );
+    }
+
+    const hp = s?.healthProfile;
+    if (hp && typeof hp === 'object') {
+      base.healthProfile = {
+        sex: hp.sex === 'female' ? 'female' : 'male',
+        age: numOrEmpty(hp.age),
+        height: numOrEmpty(hp.height),
+        weight: numOrEmpty(hp.weight),
+        activity: ACTIVITY_LEVELS.some((a) => a.key === hp.activity) ? hp.activity : 'sedentary',
+      };
+    }
+
+    const st = s?.staple;
+    if (st && typeof st === 'object') {
+      const grams = Number(st.grams);
+      base.staple = {
+        key: typeof st.key === 'string' ? st.key : DEFAULT_SETTINGS.staple.key,
+        grams: Number.isFinite(grams) && grams >= 0 && grams <= 5000 ? grams : null,
+        auto: st.auto !== false,
+      };
+    }
   } catch {
-    return { ...DEFAULT_SETTINGS, blockedKeywords: [] };
+    // 存储损坏时退回默认设置，不影响使用
   }
+  return base;
+}
+
+function numOrEmpty(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : '';
 }
 
 function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch (e) {
-    // 存不下不算致命：本次会话内设置依然生效，只是刷新后丢失
     console.warn('[今晚吃什么] 设置没能保存到本地：', e);
   }
 }
 
-/** 去重（忽略大小写），保留用户原本的写法 */
 function dedupeKeywords(list) {
   const seen = new Set();
   const out = [];
@@ -139,26 +177,23 @@ function dedupeKeywords(list) {
 let settings = loadSettings();
 
 // ------------------------------------------------------------------
-// 屏蔽关键词
+// 屏蔽
 // ------------------------------------------------------------------
 
 /**
- * 唯一的屏蔽判断入口。
- * 中文按「包含即命中」处理：屏蔽「鱼」，清蒸鲈鱼 / 红烧鱼 / 鱼香肉丝 都算命中。
+ * 唯一的屏蔽判断入口，荤素两个池子共用。
+ * 中文按「包含即命中」：屏蔽「鱼」，清蒸鲈鱼 / 红烧鱼 / 鱼香肉丝 都算命中。
  */
 function isBlocked(recipe) {
   if (!settings.blockedKeywords.length) return false;
-
   const haystack = [
     ...BLOCK_FIELDS.map((f) => recipe[f]),
     ...(recipe.ingredients || []),
     ...(recipe.tags || []),
   ].join('\n').toLowerCase();
-
   return settings.blockedKeywords.some((k) => haystack.includes(k.toLowerCase()));
 }
 
-/** 按当前屏蔽词重建可用池子 */
 function rebuildAvailable() {
   let blocked = 0;
   for (const role of MENU_ROLES) {
@@ -170,18 +205,14 @@ function rebuildAvailable() {
   state.blocked = blocked;
 }
 
-/** 把输入框内容解析成关键词（支持中英文逗号、空格分隔） */
 function parseKeywordInput(raw) {
-  return dedupeKeywords(
-    raw.split(/[,，、\s]+/).map((k) => k.trim()).filter(Boolean),
-  );
+  return dedupeKeywords(String(raw).split(/[,，、\s]+/).map((k) => k.trim()).filter(Boolean));
 }
 
 // ------------------------------------------------------------------
 // 随机菜单
 // ------------------------------------------------------------------
 
-/** 当前数量下，每个角色各需要几道；以及池子够不够 */
 function menuPlan() {
   const perRole = settings.mealSize / 2;
   const need = { protein: perRole, vegetable: perRole };
@@ -191,11 +222,10 @@ function menuPlan() {
   return { need, short, ok: short.length === 0 };
 }
 
-/** 从池子里不重复地取 n 道；池子不够返回 null（绝不返回残缺结果） */
 function sampleDistinct(pool, n) {
   if (pool.length < n) return null;
   const idx = pool.map((_, i) => i);
-  for (let i = 0; i < n; i++) {            // 部分洗牌，不必洗完整池子
+  for (let i = 0; i < n; i++) {
     const j = i + Math.floor(Math.random() * (idx.length - i));
     [idx[i], idx[j]] = [idx[j], idx[i]];
   }
@@ -208,10 +238,6 @@ function sameMenu(a, b) {
   return key(a) === key(b);
 }
 
-/**
- * 生成一桌菜：荤素各一半，组内不重样，尽量和上一桌不同。
- * 池子不足时返回 null，由调用方给出提示——不会死循环，也不会悄悄放宽屏蔽。
- */
 function pickMenu(prev) {
   if (!menuPlan().ok) return null;
 
@@ -222,7 +248,6 @@ function pickMenu(prev) {
       if (!picked) return null;
       dishes.push(...picked);
     }
-    // 兜底：万一数据里出现跨角色的重复 id，这一组作废重抽
     if (new Set(dishes.map((d) => d.id)).size !== dishes.length) return null;
     return dishes;
   };
@@ -230,53 +255,119 @@ function pickMenu(prev) {
   const prevIds = new Set(prev ? prev.map((r) => r.id) : []);
   let last = null;
 
-  // 第一优先：整桌菜全部换掉。点「换一组」就是想看点不一样的，
-  // 只换掉一半（两道菜里留一道）手感很差。
+  // 先争取整桌全换掉（点「换一组」就是想看点不一样的）
   for (let i = 0; i < 60; i++) {
     const dishes = build();
     if (!dishes) return null;
     last = dishes;
     if (!dishes.some((d) => prevIds.has(d.id))) return dishes;
   }
-
-  // 第二优先：至少整桌和上一桌不一样（池子小到必然复用时的退让）
+  // 退让：至少整桌和上一桌不一样
   for (let i = 0; i < 60; i++) {
     const dishes = build();
     if (!dishes) return null;
     last = dishes;
     if (!sameMenu(dishes, prev)) return dishes;
   }
-
-  return last;   // 池子小到换不出新组合时，接受最后一次
+  return last;
 }
 
-/** 换一组 */
 function reroll() {
   const next = pickMenu(state.current);
-  if (!next) { renderShortage(); return; }   // 池子突然不够也给出提示，不留旧菜单
+  if (!next) { renderShortage(); return; }
   state.current = next;
+  recompute();
   renderMenu();
+  renderNutrition();
   el.hint.textContent = hintText();
 }
 
 // ------------------------------------------------------------------
-// 渲染
+// 营养估算
+// ------------------------------------------------------------------
+
+/** 主食当前使用多少克；auto 模式下按人数推算 */
+function stapleGrams() {
+  if (settings.staple.auto) return settings.householdSize * STAPLE_PER_PERSON;
+  return Number(settings.staple.grams) || 0;
+}
+
+/** 重算每道菜的营养与整餐汇总 */
+function recompute() {
+  if (!state.foodIndex || !state.current) {
+    state.estimates = [];
+    state.summary = null;
+    return;
+  }
+  const units = state.foodsData.unitConversions;
+  state.estimates = state.current.map((recipe) => ({
+    recipe,
+    est: estimateRecipe(recipe, state.foodIndex, units),
+  }));
+
+  const grams = stapleGrams();
+  const key = settings.staple.key;
+  const staple = grams > 0
+    ? { key, grams, nutri: nutritionOf(key, grams, state.foodIndex) }
+    : null;
+
+  state.summary = summarizeMeal(state.estimates, staple, settings.householdSize);
+}
+
+/** 每道菜的营养小结（用于详情页） */
+function recipeNutritionHtml(est) {
+  if (est.status === 'none') {
+    return `<section class="d-section"><h3>营养估算</h3>
+      <p class="nutri-none">这道菜的食材没有可用的营养数据，暂时无法估算。</p></section>`;
+  }
+  const t = est.total;
+  const notes = [];
+  if (est.fryingOil) notes.push(`${est.fryingOil} 项油炸用油未计入`);
+  if (est.noteCount) notes.push(`${est.noteCount} 条说明文字不计入`);
+
+  return `
+    <section class="d-section">
+      <h3>营养估算</h3>
+      <div class="nutri-box">
+        <p class="nutri-scope">按菜谱所写用量（整锅）</p>
+        <p class="nutri-kcal">约 ${fmt(t.kcal)} <span>kcal</span></p>
+        <ul class="nutri-macros">
+          <li><span>蛋白质</span><b>${fmt(t.protein, 1)} g</b></li>
+          <li><span>碳水</span><b>${fmt(t.carbs, 1)} g</b></li>
+          <li><span>脂肪</span><b>${fmt(t.fat, 1)} g</b></li>
+        </ul>
+        <p class="nutri-cov">
+          <span class="nutri-tag nutri-tag--${est.status}">${STATUS_TEXT[est.status]}</span>
+          ${esc(coverageText(est.matched, est.totalCount))}
+          ${notes.length ? `<br>${esc(notes.join('；'))}` : ''}
+        </p>
+      </div>
+    </section>`;
+}
+
+// ------------------------------------------------------------------
+// 渲染：菜单
 // ------------------------------------------------------------------
 
 function cardVisual(recipe) {
   const emoji = ROLE_EMOJI[recipe.menuRole] || '🍽️';
   const fallback = `<span class="card-emoji-fallback" aria-hidden="true">${emoji}</span>`;
   if (!recipe.imageUrl) return `<span class="card-emoji">${fallback}</span>`;
-  // 有图就用图；图挂掉时 img 被移除，自动露出底下的 emoji，功能不受影响
   return `<span class="card-emoji">${fallback}`
     + `<img src="${esc(recipe.imageUrl)}" alt="" loading="lazy" onerror="this.remove()"></span>`;
 }
 
-function cardHtml(recipe) {
+function cardHtml(recipe, est) {
   const stars = recipe.difficulty
     ? `<span class="stars" title="预估烹饪难度">${'★'.repeat(recipe.difficulty)}</span>`
     : '';
   const preview = recipe.ingredients.slice(0, 4).join(' · ');
+
+  // 卡片上只给一个粗略的热量提示，详细数字留在详情页
+  let kcal = '';
+  if (est && est.status !== 'none') {
+    kcal = `<span class="card-kcal">约 ${fmt(est.total.kcal)} kcal${est.status === 'partial' ? '*' : ''}</span>`;
+  }
 
   return `
     <button class="card card--${esc(recipe.menuRole)}" type="button" data-id="${esc(recipe.id)}">
@@ -290,14 +381,19 @@ function cardHtml(recipe) {
         <span class="card-name">${esc(recipe.name)}</span>
         <span class="card-ing">${esc(preview)}</span>
       </span>
-      <span class="card-arrow" aria-hidden="true">›</span>
+      <span class="card-side">
+        ${kcal}
+        <span class="card-arrow" aria-hidden="true">›</span>
+      </span>
     </button>`;
 }
 
 function renderMenu() {
   const { current } = state;
   if (!current) return;
-  el.menu.innerHTML = current.map(cardHtml).join('');
+  el.menu.innerHTML = current
+    .map((r) => cardHtml(r, state.estimates.find((e) => e.recipe === r)?.est))
+    .join('');
   el.menu.setAttribute('aria-busy', 'false');
   el.reroll.disabled = false;
   el.heroSub.textContent = heroSubText();
@@ -309,19 +405,6 @@ function renderNotice(title, detail) {
   el.reroll.disabled = true;
 }
 
-/** 首页副标题不能和实际菜品数量矛盾 */
-function heroSubText() {
-  const half = settings.mealSize / 2;
-  return `${MENU_PHRASE[half] || `${settings.mealSize} 道菜`}，已经帮你配好了`;
-}
-
-function hintText() {
-  let text = `已收录 ${state.total} 道家常菜谱 · 点卡片看做法`;
-  if (state.blocked) text += ` · 已屏蔽 ${state.blocked} 道`;
-  return text;
-}
-
-/** 池子不够时给出明确原因，而不是留一个空白页面 */
 function renderShortage() {
   const { need, short } = menuPlan();
   const detail = short
@@ -334,31 +417,118 @@ function renderShortage() {
     + '<br>减少几个屏蔽关键词，或者把每餐数量调小一点。',
   );
   el.hint.textContent = '屏蔽条件太严了';
+  el.staplePanel.hidden = true;
+  el.nutritionPanel.hidden = true;
 }
 
-/** 设置或屏蔽词变化后，重建池子并重新出一桌 */
-function refreshMenu() {
-  rebuildAvailable();
-  if (!menuPlan().ok) {
-    state.current = null;
-    renderShortage();
-    return;
+function heroSubText() {
+  const half = settings.mealSize / 2;
+  return `${MENU_PHRASE[half] || `${settings.mealSize} 道菜`}，已经帮你配好了`;
+}
+
+function hintText() {
+  let text = `已收录 ${state.total} 道家常菜谱 · 点卡片看做法`;
+  if (state.blocked) text += ` · 已屏蔽 ${state.blocked} 道`;
+  return text;
+}
+
+// ------------------------------------------------------------------
+// 渲染：主食 + 本餐营养
+// ------------------------------------------------------------------
+
+function renderStaple() {
+  if (!state.foodsData) return;
+  const staples = state.foodsData.foods.filter((f) => f.staple);
+
+  el.stapleSelect.innerHTML = staples
+    .map((f) => `<option value="${esc(f.key)}">${esc(f.names[0])}</option>`).join('');
+  if (staples.some((f) => f.key === settings.staple.key)) {
+    el.stapleSelect.value = settings.staple.key;
+  } else {
+    settings.staple.key = staples[0]?.key ?? settings.staple.key;
+    el.stapleSelect.value = settings.staple.key;
   }
-  state.current = pickMenu(null);
-  if (!state.current) { renderShortage(); return; }
-  renderMenu();
-  el.hint.textContent = hintText();
+  el.stapleAmount.value = String(stapleGrams());
+
+  const per = settings.householdSize > 0 ? stapleGrams() / settings.householdSize : 0;
+  const food = state.foodIndex.byKey.get(settings.staple.key);
+  el.stapleNote.textContent = stapleGrams() > 0
+    ? `全家的量，人均约 ${fmt(per)} g${settings.staple.auto ? '（按人数自动）' : ''}`
+      + `　·　${food ? esc(food.usdaDescription) : ''}`
+    : '填 0 表示这顿不算主食';
+}
+
+function nutriRow(label, v, unit) {
+  return `<div class="ng-cell"><span class="ng-label">${esc(label)}</span>`
+    + `<b class="ng-value">${fmt(v, unit === 'g' ? 1 : 0)}<i>${unit}</i></b></div>`;
+}
+
+function renderNutrition() {
+  const s = state.summary;
+  if (!s) { el.nutritionPanel.hidden = true; return; }
+  el.nutritionPanel.hidden = false;
+
+  const dishes = s.dishes;
+  const withData = s.dishesWithData;
+  let status = 'full';
+  if (withData === 0) status = 'none';
+  else if (withData < dishes) status = 'partial';
+  else if (s.dishesFull < dishes) status = 'partial';
+
+  el.mealStatus.textContent = STATUS_TEXT[status];
+  el.mealStatus.className = `panel-badge panel-badge--${status}`;
+
+  const people = settings.householdSize;
+  el.mealNutri.innerHTML = `
+    <div class="ng-head">
+      <span>整顿饭</span>
+      <span>${esc(String(people))} 人平均</span>
+    </div>
+    <div class="ng-body">
+      <div class="ng-col">
+        <b class="ng-kcal">${fmt(s.total.kcal)}<i>kcal</i></b>
+        <span class="ng-sub">蛋白 ${fmt(s.total.protein, 1)}g</span>
+        <span class="ng-sub">碳水 ${fmt(s.total.carbs, 1)}g</span>
+        <span class="ng-sub">脂肪 ${fmt(s.total.fat, 1)}g</span>
+      </div>
+      <div class="ng-col ng-col--hl">
+        <b class="ng-kcal">${fmt(s.perPerson.kcal)}<i>kcal</i></b>
+        <span class="ng-sub">蛋白 ${fmt(s.perPerson.protein, 1)}g</span>
+        <span class="ng-sub">碳水 ${fmt(s.perPerson.carbs, 1)}g</span>
+        <span class="ng-sub">脂肪 ${fmt(s.perPerson.fat, 1)}g</span>
+      </div>
+    </div>`;
+
+  const parts = [`${dishes} 道菜`];
+  if (s.hasStaple) {
+    const f = state.foodIndex.byKey.get(settings.staple.key);
+    parts.push(`${f ? f.names[0] : '主食'} ${fmt(stapleGrams())}g`);
+  }
+  const skipped = state.estimates.filter((e) => e.est.fryingOil).length;
+  el.mealFoot.innerHTML = `按菜谱所写用量估算：${esc(parts.join(' + '))}`
+    + `<br>${esc(String(withData))} / ${esc(String(dishes))} 道菜有可用营养数据`
+    + (skipped ? `　·　${esc(String(skipped))} 道菜的油炸用油未计入` : '')
+    + '<br>菜谱未按人数折算，实际按你下锅的量同比变化。';
 }
 
 // ------------------------------------------------------------------
-// 设置面板
+// 渲染：设置面板
 // ------------------------------------------------------------------
+
+function radioGroupHtml(values, active, attr) {
+  return values.map((n) => `
+    <button class="s-size${n === active ? ' is-active' : ''}" type="button"
+      role="radio" aria-checked="${n === active}" data-${attr}="${n}">${n}</button>`).join('');
+}
+
+function renderPeopleGroup() {
+  el.peopleGroup.innerHTML = radioGroupHtml(PEOPLE, settings.householdSize, 'people');
+  el.peopleNote.textContent = `当前 ${settings.householdSize} 人`
+    + `　·　主食人均约 ${fmt(STAPLE_PER_PERSON)} g`;
+}
 
 function renderSizeGroup() {
-  el.sizeGroup.innerHTML = MEAL_SIZES.map((n) => `
-    <button class="s-size${n === settings.mealSize ? ' is-active' : ''}" type="button"
-      role="radio" aria-checked="${n === settings.mealSize}" data-size="${n}">${n}</button>`).join('');
-
+  el.sizeGroup.innerHTML = radioGroupHtml(MEAL_SIZES, settings.mealSize, 'size');
   const half = settings.mealSize / 2;
   el.sizeNote.textContent = `当前：${MENU_PHRASE[half] || settings.mealSize + ' 道'}`
     + `（${half} 道荤菜 + ${half} 道素菜）`;
@@ -377,10 +547,68 @@ function renderKeywords() {
   el.kwClear.hidden = list.length === 0;
 }
 
+function renderHealth() {
+  const p = settings.healthProfile;
+  el.hpSex.value = p.sex;
+  el.hpAge.value = p.age === '' ? '' : String(p.age);
+  el.hpHeight.value = p.height === '' ? '' : String(p.height);
+  el.hpWeight.value = p.weight === '' ? '' : String(p.weight);
+  el.hpActivity.innerHTML = ACTIVITY_LEVELS
+    .map((a) => `<option value="${esc(a.key)}">${esc(a.label)}　${esc(a.hint)}</option>`).join('');
+  el.hpActivity.value = p.activity;
+
+  const m = healthMetrics(p);
+  if (!m) {
+    el.hpOut.innerHTML = '';
+    el.hpHint.textContent = '把性别、年龄、身高、体重填完，这里会给出粗略参考值。';
+    return;
+  }
+  el.hpHint.textContent = '以下为粗略估算，仅供日常参考，不是医疗建议。';
+  el.hpOut.innerHTML = `
+    <div class="hp-result">
+      <div class="hp-line"><span>BMI</span><b>${fmt(m.bmi, 1)}</b>
+        <em>${esc(m.bmiCategory.label)}（${esc(m.bmiCategory.hint)}）</em></div>
+      <div class="hp-line"><span>基础代谢 BMR</span><b>${fmt(m.bmr)}</b><em>kcal / 天</em></div>
+      <div class="hp-line"><span>维持能量 TDEE</span><b>${fmt(m.tdee)}</b><em>kcal / 天（${esc(m.activity.label)}）</em></div>
+      <div class="hp-line"><span>蛋白质参考</span><b>${fmt(m.proteinG)}</b><em>g / 天（约 0.8 g/kg）</em></div>
+      <div class="hp-line"><span>碳水参考</span><b>${fmt(m.carbsLow)}–${fmt(m.carbsHigh)}</b><em>g / 天（总能量的 45%–65%）</em></div>
+      <div class="hp-line"><span>脂肪参考</span><b>${fmt(m.fatLow)}–${fmt(m.fatHigh)}</b><em>g / 天（总能量的 20%–35%）</em></div>
+    </div>
+    <p class="hp-caveat">BMI 是粗略筛查指标，不是医疗诊断。</p>`;
+}
+
+function renderDiet() {
+  el.dietList.innerHTML = DIET_REFERENCE
+    .map((d) => `<li><span>${esc(d.item)}</span><b>${esc(d.amount)}</b></li>`).join('');
+}
+
 function renderSettings() {
+  renderPeopleGroup();
   renderSizeGroup();
   renderKeywords();
+  renderHealth();
+  renderDiet();
   el.kwErr.textContent = '';
+}
+
+// ------------------------------------------------------------------
+// 面板
+// ------------------------------------------------------------------
+
+function openSheet(sheetEl, bodyEl) {
+  lastFocused = document.activeElement;
+  sheetEl.hidden = false;
+  document.body.classList.add('is-locked');
+  bodyEl.scrollTop = 0;
+  bodyEl.focus();
+}
+
+function releaseLock() {
+  if (el.detail.hidden && el.settings.hidden) {
+    document.body.classList.remove('is-locked');
+  }
+  if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
+  lastFocused = null;
 }
 
 function openSettings() {
@@ -389,27 +617,10 @@ function openSettings() {
   el.settingsClose.focus();
 }
 
-/** 关键词变更后的统一收尾：存盘 + 重画面板 + 重出菜单 */
-function afterKeywordsChange() {
-  saveSettings();
-  renderKeywords();
-  refreshMenu();
-}
-
-function addKeywords(raw) {
-  const incoming = parseKeywordInput(raw);
-  if (!incoming.length) {
-    el.kwErr.textContent = '先输入关键词再添加';
-    return false;
-  }
-  const before = settings.blockedKeywords.length;
-  settings.blockedKeywords = dedupeKeywords([...settings.blockedKeywords, ...incoming]);
-  el.kwErr.textContent = settings.blockedKeywords.length === before
-    ? '这个关键词已经在屏蔽列表里了'
-    : '';
-  afterKeywordsChange();
-  el.kwInput.value = '';
-  return true;
+function closeSettings() {
+  if (el.settings.hidden) return;
+  el.settings.hidden = true;
+  releaseLock();
 }
 
 // ------------------------------------------------------------------
@@ -429,13 +640,14 @@ function openDetail(recipe) {
   const stars = recipe.difficulty
     ? `<span class="stars" title="预估烹饪难度">${'★'.repeat(recipe.difficulty)}</span>`
     : '';
-
   const source = recipe.sourceUrl
     ? `<p>来源：<a href="${esc(recipe.sourceUrl)}" target="_blank" rel="noopener noreferrer">${esc(recipe.sourceName)}</a></p>`
     : '';
   const reference = recipe.referenceUrl
     ? `<p>参考：<a href="${esc(recipe.referenceUrl)}" target="_blank" rel="noopener noreferrer">${esc(recipe.referenceName || recipe.referenceUrl)}</a></p>`
     : '';
+
+  const est = state.estimates.find((e) => e.recipe === recipe)?.est;
 
   el.detailChip.textContent = roleLabel(recipe);
   el.detailBody.innerHTML = `
@@ -446,6 +658,7 @@ function openDetail(recipe) {
       ${stars}
     </div>
     ${recipe.description ? `<p class="d-desc">${esc(recipe.description)}</p>` : ''}
+    ${est ? recipeNutritionHtml(est) : ''}
     ${section('食材', listHtml(recipe.ingredients, 'd-list'))}
     ${section('做法', listHtml(recipe.steps, 'd-steps'))}
     ${section('小贴士', listHtml(recipe.tips, 'd-tips'))}
@@ -461,31 +674,47 @@ function closeDetail() {
   releaseLock();
 }
 
-function closeSettings() {
-  if (el.settings.hidden) return;
-  el.settings.hidden = true;
-  releaseLock();
-}
-
 // ------------------------------------------------------------------
-// 面板通用行为
+// 变更后的统一收尾
 // ------------------------------------------------------------------
 
-function openSheet(sheetEl, bodyEl) {
-  lastFocused = document.activeElement;
-  sheetEl.hidden = false;
-  document.body.classList.add('is-locked');
-  bodyEl.scrollTop = 0;
-  bodyEl.focus();
-}
-
-/** 两个面板都关上了才解锁页面滚动 */
-function releaseLock() {
-  if (el.detail.hidden && el.settings.hidden) {
-    document.body.classList.remove('is-locked');
+function refreshMenu() {
+  rebuildAvailable();
+  if (!menuPlan().ok) {
+    state.current = null;
+    state.estimates = [];
+    state.summary = null;
+    renderShortage();
+    return;
   }
-  if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
-  lastFocused = null;
+  state.current = pickMenu(null);
+  if (!state.current) { renderShortage(); return; }
+  recompute();
+  renderMenu();
+  el.staplePanel.hidden = false;
+  renderStaple();
+  renderNutrition();
+  el.hint.textContent = hintText();
+}
+
+function afterKeywordsChange() {
+  saveSettings();
+  renderKeywords();
+  refreshMenu();
+}
+
+function addKeywords(raw) {
+  const incoming = parseKeywordInput(raw);
+  if (!incoming.length) {
+    el.kwErr.textContent = '先输入关键词再添加';
+    return;
+  }
+  const before = settings.blockedKeywords.length;
+  settings.blockedKeywords = dedupeKeywords([...settings.blockedKeywords, ...incoming]);
+  el.kwErr.textContent = settings.blockedKeywords.length === before
+    ? '这个关键词已经在屏蔽列表里了' : '';
+  afterKeywordsChange();
+  el.kwInput.value = '';
 }
 
 // ------------------------------------------------------------------
@@ -497,12 +726,25 @@ el.settingsOpen.addEventListener('click', openSettings);
 el.settingsClose.addEventListener('click', closeSettings);
 el.detailClose.addEventListener('click', closeDetail);
 
-// 点菜单卡片看做法
 el.menu.addEventListener('click', (e) => {
   const card = e.target.closest('.card');
   if (!card || !state.current) return;
   const recipe = state.current.find((r) => r.id === card.dataset.id);
   if (recipe) openDetail(recipe);
+});
+
+// 用餐人数
+el.peopleGroup.addEventListener('click', (e) => {
+  const btn = e.target.closest('.s-size');
+  if (!btn) return;
+  const n = Number(btn.dataset.people);
+  if (!PEOPLE.includes(n) || n === settings.householdSize) return;
+  settings.householdSize = n;
+  saveSettings();
+  renderPeopleGroup();
+  recompute();
+  renderStaple();
+  renderNutrition();
 });
 
 // 每餐数量
@@ -517,13 +759,34 @@ el.sizeGroup.addEventListener('click', (e) => {
   refreshMenu();
 });
 
-// 添加关键词
+// 主食选择
+el.stapleSelect.addEventListener('change', () => {
+  settings.staple.key = el.stapleSelect.value;
+  saveSettings();
+  recompute();
+  renderStaple();
+  renderNutrition();
+});
+
+// 主食克数：一旦手改就退出「按人数自动」
+el.stapleAmount.addEventListener('change', () => {
+  const raw = Number(el.stapleAmount.value);
+  const v = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 5000) : 0;
+  settings.staple.grams = v;
+  settings.staple.auto = false;
+  el.stapleAmount.value = String(v);
+  saveSettings();
+  recompute();
+  renderStaple();
+  renderNutrition();
+});
+
+// 关键词
 el.kwForm.addEventListener('submit', (e) => {
   e.preventDefault();
   addKeywords(el.kwInput.value);
 });
 
-// 删除单个关键词
 el.kwList.addEventListener('click', (e) => {
   const btn = e.target.closest('.s-chip-x');
   if (!btn) return;
@@ -533,7 +796,6 @@ el.kwList.addEventListener('click', (e) => {
   afterKeywordsChange();
 });
 
-// 清空全部
 el.kwClear.addEventListener('click', () => {
   if (!settings.blockedKeywords.length) return;
   settings.blockedKeywords = [];
@@ -541,7 +803,19 @@ el.kwClear.addEventListener('click', () => {
   afterKeywordsChange();
 });
 
-// 点遮罩关闭（点面板本身不关）
+// 健康资料
+for (const [node, field] of [
+  [el.hpSex, 'sex'], [el.hpAge, 'age'], [el.hpHeight, 'height'],
+  [el.hpWeight, 'weight'], [el.hpActivity, 'activity'],
+]) {
+  node.addEventListener('change', () => {
+    const raw = node.value;
+    settings.healthProfile[field] = (field === 'sex' || field === 'activity') ? raw : numOrEmpty(raw);
+    saveSettings();
+    renderHealth();
+  });
+}
+
 for (const [sheetEl, close] of [[el.detail, closeDetail], [el.settings, closeSettings]]) {
   sheetEl.addEventListener('click', (e) => {
     if (e.target === sheetEl) close();
@@ -572,11 +846,18 @@ async function boot() {
   }
 
   try {
-    const res = await fetch(DATA_URL, { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const [recipesRes, foodsRes] = await Promise.all([
+      fetch(RECIPES_URL, { cache: 'no-cache' }),
+      fetch(FOODS_URL, { cache: 'no-cache' }),
+    ]);
+    if (!recipesRes.ok) throw new Error(`菜谱数据 HTTP ${recipesRes.status}`);
+    if (!foodsRes.ok) throw new Error(`营养数据 HTTP ${foodsRes.status}`);
 
-    const recipes = Array.isArray(data) ? data : data.recipes;
+    const recipeData = await recipesRes.json();
+    state.foodsData = await foodsRes.json();
+    state.foodIndex = buildIndex(state.foodsData);
+
+    const recipes = Array.isArray(recipeData) ? recipeData : recipeData.recipes;
     if (!Array.isArray(recipes) || !recipes.length) throw new Error('菜谱数据为空');
 
     state.total = recipes.length;
@@ -584,7 +865,6 @@ async function boot() {
     for (const r of recipes) {
       if (state.pools[r.menuRole]) state.pools[r.menuRole].push(r);
     }
-
     const missing = MENU_ROLES.filter((role) => !state.pools[role].length);
     if (missing.length) throw new Error(`缺少菜谱池：${missing.join('、')}`);
 
@@ -592,9 +872,9 @@ async function boot() {
   } catch (err) {
     console.error('[今晚吃什么] 数据加载失败：', err);
     renderNotice(
-      '菜谱数据没加载成功',
-      '请确认 <code>data/recipes.json</code> 存在，并通过本地服务器访问。'
-      + `<br>（${esc(err.message)}）`,
+      '数据没加载成功',
+      '请确认 <code>data/recipes.json</code> 与 <code>data/foods.json</code> 存在，'
+      + `并通过本地服务器访问。<br>（${esc(err.message)}）`,
     );
   }
 }
