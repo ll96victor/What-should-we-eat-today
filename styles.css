@@ -569,7 +569,6 @@ body.is-locked { overflow: hidden; }
 }
 
 .s-select:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(226, 85, 43, 0.14); }
-.s-select--sm { min-height: 42px; font-size: 15px; }
 
 .staple-input-wrap { position: relative; flex: 0 0 106px; display: flex; }
 
@@ -882,44 +881,231 @@ body.is-locked { overflow: hidden; }
 .s-sizes--8 { grid-template-columns: repeat(4, 1fr); }
 .s-sizes--8 .s-size { min-height: 48px; font-size: 17px; }
 
-/* ---------- 健康参考 ---------- */
+/* ---------- 健康与营养总开关 ---------- */
 
-.hp-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+.s-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0 10px;
 }
 
-.hp-field { display: flex; flex-direction: column; gap: 5px; }
-.hp-field--wide { grid-column: 1 / -1; }
-.hp-label { font-size: 12.5px; color: var(--text-soft); }
-.hp-field .staple-input { text-align: left; padding-right: 12px; font-weight: 500; }
-.hp-field .staple-input-wrap { flex: none; }
+.s-switch-text { font-size: 15px; font-weight: 600; }
 
-.hp-out { margin-top: 14px; }
+.s-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 58px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ece3da;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
 
-.hp-result {
+.s-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(80, 55, 40, 0.25);
+  transition: transform 0.18s ease;
+}
+
+/* 开关本体只有 34px 高（再大就显得笨重），
+   用一个透明伪元素把可点区域撑到 48px，手机上更好点中。 */
+.s-switch::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 48px;
+  transform: translate(-50%, -50%);
+}
+
+.s-switch.is-on {
+  background: linear-gradient(135deg, var(--brand), #f07a3f);
+  border-color: transparent;
+}
+
+.s-switch.is-on .s-switch-knob { transform: translateX(24px); }
+.s-switch:focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
+
+/* ---------- 家庭成员列表 ---------- */
+
+.member-list { display: flex; flex-direction: column; gap: 10px; }
+
+.member-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.member-row.is-off { opacity: 0.55; }
+
+.member-main { display: flex; flex-direction: column; gap: 3px; }
+.member-name { font-size: 16px; font-weight: 700; }
+.member-meta { font-size: 13px; color: var(--text-soft); }
+
+.member-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.member-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.member-btn:hover { border-color: #e9cdb8; color: var(--brand); }
+.member-btn:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+.member-btn--danger { color: var(--brand-dark); }
+.member-btn--danger:hover { background: var(--brand); border-color: transparent; color: #fff; }
+
+.member-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.member-confirm-text { font-size: 14px; color: var(--brand-dark); font-weight: 600; }
+
+.s-add-member {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 12px;
+  border: 1px dashed #e0cbb6;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--brand);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.s-add-member:hover { background: #fff5ec; border-color: var(--brand); }
+.s-add-member:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+/* ---------- 每位成员的健康参考 ---------- */
+
+.member-health { display: flex; flex-direction: column; gap: 12px; }
+
+.mh-card {
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #fff;
 }
 
-.hp-line {
+.mh-card.is-off { opacity: 0.55; }
+
+.mh-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px dashed var(--line);
-  font-size: 13.5px;
+  margin-bottom: 10px;
 }
 
-.hp-line:last-child { border-bottom: 0; }
-.hp-line > span { flex: 0 0 92px; color: var(--text-soft); }
-.hp-line > b { font-size: 16px; font-weight: 700; }
-.hp-line > em { font-style: normal; font-size: 12px; color: var(--text-soft); }
+.mh-name { font-size: 15px; font-weight: 700; }
 
-.hp-caveat { margin: 10px 0 0; font-size: 12.5px; color: var(--text-soft); }
+.mh-tag {
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--veg-a);
+  color: var(--veg-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+
+.mh-cell { display: flex; flex-direction: column; gap: 1px; }
+.mh-cell > span { font-size: 12px; color: var(--text-soft); }
+.mh-cell > b { font-size: 16px; font-weight: 700; }
+.mh-cell > b > i { margin-left: 2px; font-size: 11px; font-style: normal; font-weight: 500; color: var(--text-soft); }
+
+.mh-sub { margin: 10px 0 0; font-size: 12.5px; color: var(--text-soft); }
+.mh-empty { margin: 0; font-size: 13px; color: var(--text-soft); }
+
+/* ---------- 成员表单 Sheet ---------- */
+
+.sheet--top { z-index: 60; }
+
+.mf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.mf-field { display: flex; flex-direction: column; gap: 5px; }
+.mf-field--wide { grid-column: 1 / -1; }
+.mf-label { font-size: 12.5px; color: var(--text-soft); }
+
+.mf-input {
+  text-align: left;
+  padding: 10px 12px;
+  font-weight: 500;
+  background: var(--surface);
+}
+
+.mf-field .staple-input-wrap { flex: none; }
+
+.mf-err { margin-top: 12px; }
+
+.mf-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.mf-btn {
+  min-height: 50px;
+  border-radius: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mf-btn:active { transform: scale(0.98); }
+.mf-btn:focus-visible { outline: 3px solid var(--brand); outline-offset: 2px; }
+
+.mf-btn--ghost {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.mf-btn--primary {
+  border: 0;
+  background: linear-gradient(135deg, var(--brand), #f07a3f);
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(226, 85, 43, 0.26);
+}
+
+.mf-btn--primary:hover { filter: brightness(1.05); }
 
 /* 日常饮食参考 */
 .diet-list { margin: 0; padding: 0; list-style: none; font-size: 13.5px; }

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#e2552b">
-  <meta name="description" content="今晚吃什么：荤素搭配的随机家常菜单，附带营养估算，不满意就换一组，点开看做法。">
+  <meta name="description" content="今晚吃什么：荤素搭配的随机家常菜单，不满意就换一组，点开看做法。">
   <title>今晚吃什么</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -34,6 +34,7 @@
       <p class="hint" id="hint"></p>
     </div>
 
+    <!-- 以下两块只在「健康与营养」开启后显示 -->
     <section class="panel" id="staple-panel" hidden>
       <h2 class="panel-title">主食</h2>
       <div class="staple-row">
@@ -83,12 +84,6 @@
         <p class="s-intro">改动即时生效，并记在这台设备的浏览器里。</p>
 
         <section class="s-block">
-          <h3 class="s-label">用餐人数</h3>
-          <div class="s-sizes s-sizes--8" id="people-group" role="radiogroup" aria-label="用餐人数"></div>
-          <p class="s-note" id="people-note"></p>
-        </section>
-
-        <section class="s-block">
           <h3 class="s-label">每餐菜品数量</h3>
           <div class="s-sizes" id="size-group" role="radiogroup" aria-label="每餐菜品数量"></div>
           <p class="s-note" id="size-note"></p>
@@ -109,42 +104,50 @@
         </section>
 
         <section class="s-block">
-          <h3 class="s-label">健康参考</h3>
-          <p class="s-help">选填。只用于在下面算出粗略的个人参考值，不会上传。</p>
-          <div class="hp-grid">
-            <label class="hp-field">
-              <span class="hp-label">性别</span>
-              <select class="s-select s-select--sm" id="hp-sex">
-                <option value="male">男</option>
-                <option value="female">女</option>
-              </select>
-            </label>
-            <label class="hp-field">
-              <span class="hp-label">年龄</span>
-              <input class="staple-input" id="hp-age" type="number" inputmode="numeric" min="10" max="100" placeholder="岁">
-            </label>
-            <label class="hp-field">
-              <span class="hp-label">身高</span>
-              <input class="staple-input" id="hp-height" type="number" inputmode="numeric" min="100" max="230" placeholder="cm">
-            </label>
-            <label class="hp-field">
-              <span class="hp-label">体重</span>
-              <input class="staple-input" id="hp-weight" type="number" inputmode="decimal" min="25" max="200" placeholder="kg">
-            </label>
-            <label class="hp-field hp-field--wide">
-              <span class="hp-label">活动水平</span>
-              <select class="s-select" id="hp-activity"></select>
-            </label>
+          <h3 class="s-label">健康与营养</h3>
+          <div class="s-switch-row">
+            <span class="s-switch-text" id="hn-state">关闭</span>
+            <button class="s-switch" id="hn-toggle" type="button" role="switch" aria-checked="false"
+              aria-labelledby="hn-state">
+              <span class="s-switch-knob" aria-hidden="true"></span>
+            </button>
           </div>
-          <div class="hp-out" id="hp-out"></div>
-          <p class="s-note" id="hp-hint"></p>
+          <p class="s-help">
+            开启后才会显示家庭成员、主食、本餐营养估算和健康参考。
+            默认关闭，首页保持只看菜。
+          </p>
         </section>
 
-        <section class="s-block">
-          <h3 class="s-label">日常饮食参考</h3>
-          <p class="s-help">普通成年人每天的常识性建议，和上面的个人计算是两回事。</p>
-          <ul class="diet-list" id="diet-list"></ul>
-        </section>
+        <div id="hn-sections" hidden>
+          <section class="s-block">
+            <h3 class="s-label">家庭成员</h3>
+            <p class="s-help">
+              每位成员的身高体重只保存在这台设备的浏览器里，不会上传，也不跨设备同步。
+            </p>
+            <div class="member-list" id="member-list"></div>
+            <button class="s-add-member" id="member-add" type="button">＋ 添加成员</button>
+            <p class="s-err" id="member-err" role="alert"></p>
+          </section>
+
+          <section class="s-block">
+            <h3 class="s-label">本次用餐人数</h3>
+            <div class="s-sizes s-sizes--8" id="people-group" role="radiogroup" aria-label="本次用餐人数"></div>
+            <p class="s-note" id="people-note"></p>
+            <button class="s-clear" id="people-follow" type="button" hidden>恢复为家庭成员数</button>
+          </section>
+
+          <section class="s-block">
+            <h3 class="s-label">健康参考</h3>
+            <p class="s-help">按每位成员分别计算，都是粗略参考值。</p>
+            <div class="member-health" id="member-health"></div>
+          </section>
+
+          <section class="s-block">
+            <h3 class="s-label">日常饮食参考</h3>
+            <p class="s-help">普通成年人每天的常识性建议，和上面的个人计算是两回事。</p>
+            <ul class="diet-list" id="diet-list"></ul>
+          </section>
+        </div>
 
         <p class="s-boundary">
           屏蔽按菜谱文字做关键词匹配，只用来减少推荐；不能替代对实际食材和交叉接触风险的人工确认。
@@ -154,6 +157,68 @@
           有疾病、孕期哺乳期或特殊饮食需求请咨询医生或注册营养师。
         </p>
       </div>
+    </div>
+  </div>
+
+  <div class="sheet sheet--top" id="member" hidden>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="member-title">
+      <div class="sheet-bar">
+        <button class="sheet-back" id="member-close" type="button">
+          <span aria-hidden="true">‹</span> 返回
+        </button>
+        <span class="sheet-chip">家庭成员</span>
+      </div>
+
+      <form class="sheet-body" id="member-form" novalidate>
+        <h2 class="s-title" id="member-title">添加成员</h2>
+        <p class="s-intro">只需要大致数据，用来算粗略参考值。填错的数字会被拦下，不会存进去。</p>
+
+        <div class="mf-grid">
+          <label class="mf-field mf-field--wide">
+            <span class="mf-label">称呼</span>
+            <input class="staple-input mf-input" id="mf-name" type="text" maxlength="12"
+              autocomplete="off" placeholder="如：我、老婆、孩子">
+          </label>
+
+          <label class="mf-field">
+            <span class="mf-label">性别</span>
+            <select class="s-select" id="mf-gender">
+              <option value="male">男</option>
+              <option value="female">女</option>
+            </select>
+          </label>
+
+          <label class="mf-field">
+            <span class="mf-label">年龄</span>
+            <input class="staple-input mf-input" id="mf-age" type="number" inputmode="numeric"
+              min="10" max="100" placeholder="岁">
+          </label>
+
+          <label class="mf-field">
+            <span class="mf-label">身高</span>
+            <input class="staple-input mf-input" id="mf-height" type="number" inputmode="numeric"
+              min="80" max="230" placeholder="cm">
+          </label>
+
+          <label class="mf-field">
+            <span class="mf-label">体重</span>
+            <input class="staple-input mf-input" id="mf-weight" type="number" inputmode="decimal"
+              min="25" max="200" placeholder="kg">
+          </label>
+
+          <label class="mf-field mf-field--wide">
+            <span class="mf-label">活动水平</span>
+            <select class="s-select" id="mf-activity"></select>
+          </label>
+        </div>
+
+        <p class="s-err mf-err" id="mf-err" role="alert"></p>
+
+        <div class="mf-actions">
+          <button class="mf-btn mf-btn--ghost" id="member-cancel" type="button">取消</button>
+          <button class="mf-btn mf-btn--primary" id="member-save" type="submit">保存</button>
+        </div>
+      </form>
     </div>
   </div>
 

@@ -2,15 +2,19 @@
    今晚吃什么 · 前端逻辑
    ------------------------------------------------------------
    打开页面 → 随机给出荤素搭配的一桌菜 → 不满意就换一组 → 点卡片看做法。
-   可以设置用餐人数、每餐菜品数量、屏蔽关键词，并看到粗略的营养估算。
-   全部设置存在浏览器本地，不上传、不需要账号。
+   首页默认只显示菜，保持极简。
 
+   「健康与营养」默认关闭。开启后才会出现：家庭成员、主食、
+   本餐营养估算、健康参考。关闭时不显示也不参与计算，数据仍保留。
+
+   全部设置存在浏览器本地，不上传、不需要账号。
    数据与计算全部在本地完成，运行时不请求任何第三方接口。
    ============================================================ */
 
 import {
   buildIndex, estimateRecipe, nutritionOf, summarizeMeal,
-  healthMetrics, ACTIVITY_LEVELS, DIET_REFERENCE,
+  healthMetrics, validateMember, ACTIVITY_LEVELS, DIET_REFERENCE,
+  MAX_MEMBERS, NAME_MAX,
   STATUS_TEXT, coverageText, fmt,
 } from './nutrition.js';
 
@@ -27,17 +31,31 @@ const ROLE_LABEL = { protein: '荤菜', vegetable: '素菜' };
 const MEAL_SIZES = [2, 4, 6, 8];
 /** 用餐人数可选值 */
 const PEOPLE = [1, 2, 3, 4, 5, 6, 7, 8];
+/** 没有家庭成员资料时的默认用餐人数 */
+const DEFAULT_DINERS = 2;
 /** 每人默认主食量（克，熟重） */
 const STAPLE_PER_PERSON = 150;
 
 const MENU_PHRASE = { 1: '一荤一素', 2: '两荤两素', 3: '三荤三素', 4: '四荤四素' };
 
+const ACTIVITY_LABEL = Object.fromEntries(ACTIVITY_LEVELS.map((a) => [a.key, a.label]));
+
 const SETTINGS_KEY = 'what-should-we-eat-today.settings';
+
+/**
+ * 设置结构。
+ *
+ * 关于人数：只有**一个**事实源在描述「今天几个人吃」——
+ *   members 描述「家里有谁」，currentMealHouseholdSize 描述「今天来几个」。
+ *   后者为 null 时表示「跟着家庭成员走」，绝不把两者强绑成同一个数字。
+ */
 const DEFAULT_SETTINGS = {
   mealSize: 2,
-  householdSize: 2,
+  healthNutritionEnabled: false,
+  members: [],
+  /** 本次用餐人数；null = 自动（有已启用成员就用成员数，否则用 DEFAULT_DINERS） */
+  currentMealHouseholdSize: null,
   blockedKeywords: [],
-  healthProfile: { sex: 'male', age: '', height: '', weight: '', activity: 'sedentary' },
   staple: { key: 'rice-cooked', grams: null, auto: true },
 };
 
@@ -54,18 +72,25 @@ const state = {
   foodsData: null,
   estimates: [],
   summary: null,
+  /** 正在等待二次确认删除的成员 id */
+  pendingDeleteId: null,
+  /** 正在编辑的成员 id；null 表示新增 */
+  editingMemberId: null,
 };
 
 const el = {};
 for (const id of [
   'hero-sub', 'menu', 'reroll', 'hint', 'detail', 'detail-body', 'detail-close', 'detail-chip',
   'settings', 'settings-body', 'settings-open', 'settings-close',
-  'size-group', 'size-note', 'people-group', 'people-note',
+  'size-group', 'size-note', 'people-group', 'people-note', 'people-follow',
   'kw-form', 'kw-input', 'kw-list', 'kw-clear', 'kw-err',
+  'hn-toggle', 'hn-state', 'hn-sections',
+  'member-list', 'member-add', 'member-err',
+  'member-health', 'diet-list',
   'staple-panel', 'staple-select', 'staple-amount', 'staple-note',
   'nutrition-panel', 'meal-nutri', 'meal-foot', 'meal-status',
-  'hp-sex', 'hp-age', 'hp-height', 'hp-weight', 'hp-activity', 'hp-out', 'hp-hint',
-  'diet-list',
+  'member', 'member-form', 'member-title', 'member-close', 'member-cancel', 'member-save',
+  'mf-name', 'mf-gender', 'mf-age', 'mf-height', 'mf-weight', 'mf-activity', 'mf-err',
 ]) {
   el[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = document.getElementById(id);
 }
@@ -95,43 +120,112 @@ function categoryTag(recipe) {
   return `<span class="card-cat">${esc(recipe.categoryName)}</span>`;
 }
 
+/** 健康与营养是否开启 */
+function hnOn() {
+  return settings.healthNutritionEnabled === true;
+}
+
+function numOrEmpty(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : '';
+}
+
+function dedupeKeywords(list) {
+  const seen = new Set();
+  const out = [];
+  for (const k of list) {
+    const key = k.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(k);
+  }
+  return out;
+}
+
+let memberSeq = 0;
+function newMemberId() {
+  memberSeq += 1;
+  return `member-${Date.now().toString(36)}-${memberSeq}`;
+}
+
 // ------------------------------------------------------------------
 // 设置读写
 // ------------------------------------------------------------------
 
+/** 从各种脏输入里救回一位成员；救不回来返回 null */
+function normalizeMember(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const m = {
+    id: typeof raw.id === 'string' && raw.id ? raw.id : newMemberId(),
+    name: String(raw.name ?? '').trim().slice(0, NAME_MAX),
+    gender: raw.gender === 'female' ? 'female' : 'male',
+    age: Number(raw.age),
+    heightCm: Number(raw.heightCm),
+    weightKg: Number(raw.weightKg),
+    activityLevel: ACTIVITY_LEVELS.some((a) => a.key === raw.activityLevel)
+      ? raw.activityLevel : 'sedentary',
+    enabled: raw.enabled !== false,
+  };
+  // 存进来时就不合法的成员直接丢弃，避免界面上出现半残的条目
+  return validateMember(m) === null ? m : null;
+}
+
 function loadSettings() {
   const base = {
     ...DEFAULT_SETTINGS,
+    members: [],
     blockedKeywords: [],
-    healthProfile: { ...DEFAULT_SETTINGS.healthProfile },
     staple: { ...DEFAULT_SETTINGS.staple },
   };
+  let raw = null;
   try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return base;
+    raw = localStorage.getItem(SETTINGS_KEY);
+  } catch {
+    return base;
+  }
+  if (!raw) return base;
+
+  try {
     const s = JSON.parse(raw);
 
-    const mealSize = Number(s?.mealSize);
-    if (MEAL_SIZES.includes(mealSize)) base.mealSize = mealSize;
+    base.healthNutritionEnabled = s?.healthNutritionEnabled === true;
+    base.mealSize = MEAL_SIZES.includes(Number(s?.mealSize))
+      ? Number(s.mealSize) : DEFAULT_SETTINGS.mealSize;
 
-    const people = Number(s?.householdSize);
-    if (PEOPLE.includes(people)) base.householdSize = people;
+    if (Array.isArray(s?.members)) {
+      base.members = s.members.map(normalizeMember).filter(Boolean).slice(0, MAX_MEMBERS);
+    }
+
+    // 旧版本存的是「单个健康资料」，迁移成一位成员，不丢用户已填的数据
+    if (!base.members.length && s?.healthProfile && typeof s.healthProfile === 'object') {
+      const legacy = normalizeMember({
+        name: '我',
+        gender: s.healthProfile.sex,
+        age: s.healthProfile.age,
+        heightCm: s.healthProfile.height,
+        weightKg: s.healthProfile.weight,
+        activityLevel: s.healthProfile.activity,
+        enabled: true,
+      });
+      if (legacy) base.members = [legacy];
+    }
+
+    // 本次用餐人数：null 表示跟随家庭成员
+    if (s?.currentMealHouseholdSize === null || s?.currentMealHouseholdSize === undefined) {
+      base.currentMealHouseholdSize = null;
+    } else {
+      const n = Number(s.currentMealHouseholdSize);
+      base.currentMealHouseholdSize = PEOPLE.includes(n) ? n : null;
+    }
+    // 更旧版本只有 householdSize（纯手动人数），迁移成显式覆盖值
+    if (base.currentMealHouseholdSize === null && PEOPLE.includes(Number(s?.householdSize))) {
+      base.currentMealHouseholdSize = Number(s.householdSize);
+    }
 
     if (Array.isArray(s?.blockedKeywords)) {
       base.blockedKeywords = dedupeKeywords(
         s.blockedKeywords.filter((k) => typeof k === 'string' && k.trim()).map((k) => k.trim()),
       );
-    }
-
-    const hp = s?.healthProfile;
-    if (hp && typeof hp === 'object') {
-      base.healthProfile = {
-        sex: hp.sex === 'female' ? 'female' : 'male',
-        age: numOrEmpty(hp.age),
-        height: numOrEmpty(hp.height),
-        weight: numOrEmpty(hp.weight),
-        activity: ACTIVITY_LEVELS.some((a) => a.key === hp.activity) ? hp.activity : 'sedentary',
-      };
     }
 
     const st = s?.staple;
@@ -149,11 +243,6 @@ function loadSettings() {
   return base;
 }
 
-function numOrEmpty(v) {
-  const n = Number(v);
-  return Number.isFinite(n) && n > 0 ? n : '';
-}
-
 function saveSettings() {
   try {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -162,19 +251,29 @@ function saveSettings() {
   }
 }
 
-function dedupeKeywords(list) {
-  const seen = new Set();
-  const out = [];
-  for (const k of list) {
-    const key = k.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(k);
-  }
-  return out;
+let settings = loadSettings();
+
+// ------------------------------------------------------------------
+// 家庭成员 / 用餐人数
+// ------------------------------------------------------------------
+
+function enabledMembers() {
+  return settings.members.filter((m) => m.enabled);
 }
 
-let settings = loadSettings();
+/**
+ * 今天实际几个人吃。
+ * 有显式指定就用指定的；否则跟随已启用成员数；再没有就用默认值。
+ */
+function effectiveDiners() {
+  if (settings.currentMealHouseholdSize != null) return settings.currentMealHouseholdSize;
+  const on = enabledMembers().length;
+  return on > 0 ? on : DEFAULT_DINERS;
+}
+
+function findMember(id) {
+  return settings.members.find((m) => m.id === id) ?? null;
+}
 
 // ------------------------------------------------------------------
 // 屏蔽
@@ -278,6 +377,7 @@ function reroll() {
   state.current = next;
   recompute();
   renderMenu();
+  renderStaple();
   renderNutrition();
   el.hint.textContent = hintText();
 }
@@ -286,15 +386,18 @@ function reroll() {
 // 营养估算
 // ------------------------------------------------------------------
 
-/** 主食当前使用多少克；auto 模式下按人数推算 */
+/** 主食当前使用多少克；自动模式下按本次用餐人数推算 */
 function stapleGrams() {
-  if (settings.staple.auto) return settings.householdSize * STAPLE_PER_PERSON;
+  if (settings.staple.auto) return effectiveDiners() * STAPLE_PER_PERSON;
   return Number(settings.staple.grams) || 0;
 }
 
-/** 重算每道菜的营养与整餐汇总 */
+/**
+ * 重算每道菜的营养与整餐汇总。
+ * 健康与营养关闭时不做任何计算——数据保留，只是不参与。
+ */
 function recompute() {
-  if (!state.foodIndex || !state.current) {
+  if (!hnOn() || !state.foodIndex || !state.current) {
     state.estimates = [];
     state.summary = null;
     return;
@@ -311,10 +414,10 @@ function recompute() {
     ? { key, grams, nutri: nutritionOf(key, grams, state.foodIndex) }
     : null;
 
-  state.summary = summarizeMeal(state.estimates, staple, settings.householdSize);
+  state.summary = summarizeMeal(state.estimates, staple, effectiveDiners());
 }
 
-/** 每道菜的营养小结（用于详情页） */
+/** 每道菜的营养小结（详情页用） */
 function recipeNutritionHtml(est) {
   if (est.status === 'none') {
     return `<section class="d-section"><h3>营养估算</h3>
@@ -363,9 +466,9 @@ function cardHtml(recipe, est) {
     : '';
   const preview = recipe.ingredients.slice(0, 4).join(' · ');
 
-  // 卡片上只给一个粗略的热量提示，详细数字留在详情页
+  // 热量只在开启健康与营养后才出现在卡片上；关闭时首页只有菜名
   let kcal = '';
-  if (est && est.status !== 'none') {
+  if (hnOn() && est && est.status !== 'none') {
     kcal = `<span class="card-kcal">约 ${fmt(est.total.kcal)} kcal${est.status === 'partial' ? '*' : ''}</span>`;
   }
 
@@ -433,13 +536,14 @@ function hintText() {
 }
 
 // ------------------------------------------------------------------
-// 渲染：主食 + 本餐营养
+// 渲染：主食 + 本餐营养（仅在开启时显示）
 // ------------------------------------------------------------------
 
 function renderStaple() {
-  if (!state.foodsData) return;
-  const staples = state.foodsData.foods.filter((f) => f.staple);
+  if (!hnOn() || !state.foodsData) { el.staplePanel.hidden = true; return; }
+  el.staplePanel.hidden = false;
 
+  const staples = state.foodsData.foods.filter((f) => f.staple);
   el.stapleSelect.innerHTML = staples
     .map((f) => `<option value="${esc(f.key)}">${esc(f.names[0])}</option>`).join('');
   if (staples.some((f) => f.key === settings.staple.key)) {
@@ -450,20 +554,17 @@ function renderStaple() {
   }
   el.stapleAmount.value = String(stapleGrams());
 
-  const per = settings.householdSize > 0 ? stapleGrams() / settings.householdSize : 0;
+  const diners = effectiveDiners();
+  const per = diners > 0 ? stapleGrams() / diners : 0;
   const food = state.foodIndex.byKey.get(settings.staple.key);
   el.stapleNote.textContent = stapleGrams() > 0
-    ? `全家的量，人均约 ${fmt(per)} g${settings.staple.auto ? '（按人数自动）' : ''}`
-      + `　·　${food ? esc(food.usdaDescription) : ''}`
+    ? `全家的量，人均约 ${fmt(per)} g${settings.staple.auto ? `（按 ${diners} 人自动）` : ''}`
+      + `　·　${food ? food.usdaDescription : ''}`
     : '填 0 表示这顿不算主食';
 }
 
-function nutriRow(label, v, unit) {
-  return `<div class="ng-cell"><span class="ng-label">${esc(label)}</span>`
-    + `<b class="ng-value">${fmt(v, unit === 'g' ? 1 : 0)}<i>${unit}</i></b></div>`;
-}
-
 function renderNutrition() {
+  if (!hnOn()) { el.nutritionPanel.hidden = true; return; }
   const s = state.summary;
   if (!s) { el.nutritionPanel.hidden = true; return; }
   el.nutritionPanel.hidden = false;
@@ -478,7 +579,7 @@ function renderNutrition() {
   el.mealStatus.textContent = STATUS_TEXT[status];
   el.mealStatus.className = `panel-badge panel-badge--${status}`;
 
-  const people = settings.householdSize;
+  const people = effectiveDiners();
   el.mealNutri.innerHTML = `
     <div class="ng-head">
       <span>整顿饭</span>
@@ -521,17 +622,28 @@ function radioGroupHtml(values, active, attr) {
       role="radio" aria-checked="${n === active}" data-${attr}="${n}">${n}</button>`).join('');
 }
 
-function renderPeopleGroup() {
-  el.peopleGroup.innerHTML = radioGroupHtml(PEOPLE, settings.householdSize, 'people');
-  el.peopleNote.textContent = `当前 ${settings.householdSize} 人`
-    + `　·　主食人均约 ${fmt(STAPLE_PER_PERSON)} g`;
-}
-
 function renderSizeGroup() {
   el.sizeGroup.innerHTML = radioGroupHtml(MEAL_SIZES, settings.mealSize, 'size');
   const half = settings.mealSize / 2;
   el.sizeNote.textContent = `当前：${MENU_PHRASE[half] || settings.mealSize + ' 道'}`
     + `（${half} 道荤菜 + ${half} 道素菜）`;
+}
+
+function renderPeopleGroup() {
+  const diners = effectiveDiners();
+  el.peopleGroup.innerHTML = radioGroupHtml(PEOPLE, diners, 'people');
+
+  const on = enabledMembers().length;
+  const overridden = settings.currentMealHouseholdSize != null;
+  if (on > 0) {
+    el.peopleNote.textContent = overridden && settings.currentMealHouseholdSize !== on
+      ? `家庭成员 ${on} 人，本次按 ${diners} 人算`
+      : `家庭成员 ${on} 人，本次按 ${diners} 人算`;
+  } else {
+    el.peopleNote.textContent = `当前 ${diners} 人　·　主食人均约 ${fmt(STAPLE_PER_PERSON)} g`;
+  }
+  // 只在「有成员可跟随」且当前是手动指定时才提供恢复入口
+  el.peopleFollow.hidden = !(on > 0 && overridden);
 }
 
 function renderKeywords() {
@@ -547,34 +659,78 @@ function renderKeywords() {
   el.kwClear.hidden = list.length === 0;
 }
 
-function renderHealth() {
-  const p = settings.healthProfile;
-  el.hpSex.value = p.sex;
-  el.hpAge.value = p.age === '' ? '' : String(p.age);
-  el.hpHeight.value = p.height === '' ? '' : String(p.height);
-  el.hpWeight.value = p.weight === '' ? '' : String(p.weight);
-  el.hpActivity.innerHTML = ACTIVITY_LEVELS
-    .map((a) => `<option value="${esc(a.key)}">${esc(a.label)}　${esc(a.hint)}</option>`).join('');
-  el.hpActivity.value = p.activity;
+function renderHealthToggle() {
+  const on = hnOn();
+  el.hnToggle.setAttribute('aria-checked', String(on));
+  el.hnToggle.classList.toggle('is-on', on);
+  el.hnState.textContent = on ? '开启' : '关闭';
+  el.hnSections.hidden = !on;
+}
 
-  const m = healthMetrics(p);
-  if (!m) {
-    el.hpOut.innerHTML = '';
-    el.hpHint.textContent = '把性别、年龄、身高、体重填完，这里会给出粗略参考值。';
+function memberMetaText(m) {
+  return `${m.age}岁 · ${m.heightCm}cm · ${m.weightKg}kg · ${ACTIVITY_LABEL[m.activityLevel] || ''}`;
+}
+
+function renderMembers() {
+  const list = settings.members;
+  if (!list.length) {
+    el.memberList.innerHTML = '<p class="s-empty">还没有添加家庭成员</p>';
     return;
   }
-  el.hpHint.textContent = '以下为粗略估算，仅供日常参考，不是医疗建议。';
-  el.hpOut.innerHTML = `
-    <div class="hp-result">
-      <div class="hp-line"><span>BMI</span><b>${fmt(m.bmi, 1)}</b>
-        <em>${esc(m.bmiCategory.label)}（${esc(m.bmiCategory.hint)}）</em></div>
-      <div class="hp-line"><span>基础代谢 BMR</span><b>${fmt(m.bmr)}</b><em>kcal / 天</em></div>
-      <div class="hp-line"><span>维持能量 TDEE</span><b>${fmt(m.tdee)}</b><em>kcal / 天（${esc(m.activity.label)}）</em></div>
-      <div class="hp-line"><span>蛋白质参考</span><b>${fmt(m.proteinG)}</b><em>g / 天（约 0.8 g/kg）</em></div>
-      <div class="hp-line"><span>碳水参考</span><b>${fmt(m.carbsLow)}–${fmt(m.carbsHigh)}</b><em>g / 天（总能量的 45%–65%）</em></div>
-      <div class="hp-line"><span>脂肪参考</span><b>${fmt(m.fatLow)}–${fmt(m.fatHigh)}</b><em>g / 天（总能量的 20%–35%）</em></div>
-    </div>
-    <p class="hp-caveat">BMI 是粗略筛查指标，不是医疗诊断。</p>`;
+  el.memberList.innerHTML = list.map((m) => {
+    const confirming = state.pendingDeleteId === m.id;
+    const acts = confirming
+      ? `<div class="member-confirm">
+           <span class="member-confirm-text">删除「${esc(m.name)}」？</span>
+           <button class="member-btn" type="button" data-act="cancel-del">取消</button>
+           <button class="member-btn member-btn--danger" type="button" data-act="confirm-del">删除</button>
+         </div>`
+      : `<div class="member-acts">
+           <button class="member-btn" type="button" data-act="edit">编辑</button>
+           <button class="member-btn" type="button" data-act="toggle">${m.enabled ? '停用' : '启用'}</button>
+           <button class="member-btn member-btn--danger" type="button" data-act="del">删除</button>
+         </div>`;
+    return `
+      <div class="member-row${m.enabled ? '' : ' is-off'}" data-id="${esc(m.id)}">
+        <div class="member-main">
+          <span class="member-name">${esc(m.name)}</span>
+          <span class="member-meta">${esc(memberMetaText(m))}${m.enabled ? '' : '　·　已停用'}</span>
+        </div>
+        ${acts}
+      </div>`;
+  }).join('');
+}
+
+function renderMemberHealth() {
+  if (!settings.members.length) {
+    el.memberHealth.innerHTML = '<p class="s-empty">添加家庭成员后，这里会按人分别给出参考值。</p>';
+    return;
+  }
+  el.memberHealth.innerHTML = settings.members.map((m) => {
+    const metrics = healthMetrics(m);
+    if (!metrics) {
+      return `<div class="mh-card${m.enabled ? '' : ' is-off'}">
+        <div class="mh-head"><span class="mh-name">${esc(m.name)}</span>
+          <span class="mh-tag">资料不全</span></div>
+        <p class="mh-empty">这位成员的资料没填完整，暂时算不出参考值。</p>
+      </div>`;
+    }
+    return `
+      <div class="mh-card${m.enabled ? '' : ' is-off'}">
+        <div class="mh-head">
+          <span class="mh-name">${esc(m.name)}</span>
+          <span class="mh-tag">${esc(metrics.bmiCategory.label)}</span>
+        </div>
+        <div class="mh-grid">
+          <div class="mh-cell"><span>BMI</span><b>${fmt(metrics.bmi, 1)}</b></div>
+          <div class="mh-cell"><span>基础代谢</span><b>${fmt(metrics.bmr)}<i>kcal</i></b></div>
+          <div class="mh-cell"><span>维持能量</span><b>${fmt(metrics.tdee)}<i>kcal</i></b></div>
+          <div class="mh-cell"><span>蛋白质</span><b>${fmt(metrics.proteinG)}<i>g</i></b></div>
+        </div>
+        <p class="mh-sub">碳水 ${fmt(metrics.carbsLow)}–${fmt(metrics.carbsHigh)} g　·　`
+      + `脂肪 ${fmt(metrics.fatLow)}–${fmt(metrics.fatHigh)} g　·　每天</p>
+      </div>`;
+  }).join('');
 }
 
 function renderDiet() {
@@ -583,32 +739,36 @@ function renderDiet() {
 }
 
 function renderSettings() {
-  renderPeopleGroup();
   renderSizeGroup();
   renderKeywords();
-  renderHealth();
-  renderDiet();
+  renderHealthToggle();
+  if (hnOn()) {
+    renderMembers();
+    renderPeopleGroup();
+    renderMemberHealth();
+    renderDiet();
+  }
   el.kwErr.textContent = '';
+  el.memberErr.textContent = '';
 }
 
 // ------------------------------------------------------------------
 // 面板
 // ------------------------------------------------------------------
 
+function anySheetOpen() {
+  return !el.detail.hidden || !el.settings.hidden || !el.member.hidden;
+}
+
 function openSheet(sheetEl, bodyEl) {
   lastFocused = document.activeElement;
   sheetEl.hidden = false;
   document.body.classList.add('is-locked');
-  bodyEl.scrollTop = 0;
-  bodyEl.focus();
+  if (bodyEl) { bodyEl.scrollTop = 0; bodyEl.focus(); }
 }
 
 function releaseLock() {
-  if (el.detail.hidden && el.settings.hidden) {
-    document.body.classList.remove('is-locked');
-  }
-  if (lastFocused && document.contains(lastFocused)) lastFocused.focus();
-  lastFocused = null;
+  if (!anySheetOpen()) document.body.classList.remove('is-locked');
 }
 
 function openSettings() {
@@ -621,6 +781,121 @@ function closeSettings() {
   if (el.settings.hidden) return;
   el.settings.hidden = true;
   releaseLock();
+}
+
+function closeDetail() {
+  if (el.detail.hidden) return;
+  el.detail.hidden = true;
+  el.detailBody.innerHTML = '';
+  releaseLock();
+}
+
+// ------------------------------------------------------------------
+// 成员表单（新增与编辑共用同一个 Sheet）
+// ------------------------------------------------------------------
+
+function fillMemberForm(member) {
+  state.editingMemberId = member?.id ?? null;
+  el.memberTitle.textContent = member ? '编辑成员' : '添加成员';
+  el.mfName.value = member?.name ?? '';
+  el.mfGender.value = member?.gender ?? 'male';
+  el.mfAge.value = member ? String(member.age) : '';
+  el.mfHeight.value = member ? String(member.heightCm) : '';
+  el.mfWeight.value = member ? String(member.weightKg) : '';
+  el.mfActivity.value = member?.activityLevel ?? 'sedentary';
+  el.mfErr.textContent = '';
+}
+
+function openMemberSheet(member) {
+  fillMemberForm(member);
+  openSheet(el.member, null);
+  el.mfName.focus();
+}
+
+function closeMemberSheet() {
+  if (el.member.hidden) return;
+  el.member.hidden = true;
+  el.memberForm.reset();
+  state.editingMemberId = null;
+  releaseLock();
+  // 关掉成员表单后把焦点还给设置面板里的「添加成员」
+  if (!el.settings.hidden) el.memberAdd.focus();
+}
+
+/** 从表单读出原始输入（不 trim 数字，交给校验统一判定） */
+function readMemberForm() {
+  return {
+    id: state.editingMemberId,
+    name: el.mfName.value.trim(),
+    gender: el.mfGender.value,
+    age: el.mfAge.value,
+    heightCm: el.mfHeight.value,
+    weightKg: el.mfWeight.value,
+    activityLevel: el.mfActivity.value,
+    enabled: state.editingMemberId
+      ? (findMember(state.editingMemberId)?.enabled ?? true)
+      : true,
+  };
+}
+
+function saveMember() {
+  const draft = readMemberForm();
+  const err = validateMember(draft);
+  if (err) {
+    el.mfErr.textContent = err;
+    return;
+  }
+
+  const member = {
+    id: draft.id || newMemberId(),
+    name: draft.name,
+    gender: draft.gender,
+    age: Number(draft.age),
+    heightCm: Number(draft.heightCm),
+    weightKg: Number(draft.weightKg),
+    activityLevel: draft.activityLevel,
+    enabled: draft.enabled,
+  };
+
+  if (draft.id) {
+    const i = settings.members.findIndex((m) => m.id === draft.id);
+    if (i >= 0) settings.members[i] = member;
+    else settings.members.push(member);
+  } else {
+    if (settings.members.length >= MAX_MEMBERS) {
+      el.mfErr.textContent = `最多添加 ${MAX_MEMBERS} 位家庭成员`;
+      return;
+    }
+    settings.members.push(member);
+  }
+
+  saveSettings();
+  closeMemberSheet();
+  renderMembers();
+  renderPeopleGroup();
+  renderMemberHealth();
+  refreshMenu();
+}
+
+function deleteMember(id) {
+  settings.members = settings.members.filter((m) => m.id !== id);
+  state.pendingDeleteId = null;
+  saveSettings();
+  renderMembers();
+  renderPeopleGroup();
+  renderMemberHealth();
+  refreshMenu();
+}
+
+function toggleMember(id) {
+  const m = findMember(id);
+  if (!m) return;
+  m.enabled = !m.enabled;
+  saveSettings();
+  renderMembers();
+  renderPeopleGroup();
+  renderMemberHealth();
+  refreshMenu();
 }
 
 // ------------------------------------------------------------------
@@ -647,7 +922,8 @@ function openDetail(recipe) {
     ? `<p>参考：<a href="${esc(recipe.referenceUrl)}" target="_blank" rel="noopener noreferrer">${esc(recipe.referenceName || recipe.referenceUrl)}</a></p>`
     : '';
 
-  const est = state.estimates.find((e) => e.recipe === recipe)?.est;
+  // 营养区只在开启健康与营养时出现
+  const est = hnOn() ? state.estimates.find((e) => e.recipe === recipe)?.est : null;
 
   el.detailChip.textContent = roleLabel(recipe);
   el.detailBody.innerHTML = `
@@ -667,13 +943,6 @@ function openDetail(recipe) {
   openSheet(el.detail, el.detailBody);
 }
 
-function closeDetail() {
-  if (el.detail.hidden) return;
-  el.detail.hidden = true;
-  el.detailBody.innerHTML = '';
-  releaseLock();
-}
-
 // ------------------------------------------------------------------
 // 变更后的统一收尾
 // ------------------------------------------------------------------
@@ -691,10 +960,23 @@ function refreshMenu() {
   if (!state.current) { renderShortage(); return; }
   recompute();
   renderMenu();
-  el.staplePanel.hidden = false;
   renderStaple();
   renderNutrition();
   el.hint.textContent = hintText();
+}
+
+/** 开关切换后重画所有受影响的地方 */
+function applyHealthToggle() {
+  renderHealthToggle();
+  renderSettings();
+  refreshMenu();
+  // 首页两块与卡片上的热量都要跟着开关走
+  if (hnOn()) {
+    renderMembers();
+    renderPeopleGroup();
+    renderMemberHealth();
+    renderDiet();
+  }
 }
 
 function afterKeywordsChange() {
@@ -733,18 +1015,12 @@ el.menu.addEventListener('click', (e) => {
   if (recipe) openDetail(recipe);
 });
 
-// 用餐人数
-el.peopleGroup.addEventListener('click', (e) => {
-  const btn = e.target.closest('.s-size');
-  if (!btn) return;
-  const n = Number(btn.dataset.people);
-  if (!PEOPLE.includes(n) || n === settings.householdSize) return;
-  settings.householdSize = n;
+// 健康与营养总开关
+el.hnToggle.addEventListener('click', () => {
+  settings.healthNutritionEnabled = !hnOn();
+  // 关闭时保留成员、主食、屏蔽等全部数据，只是不再显示与计算
   saveSettings();
-  renderPeopleGroup();
-  recompute();
-  renderStaple();
-  renderNutrition();
+  applyHealthToggle();
 });
 
 // 每餐数量
@@ -758,6 +1034,79 @@ el.sizeGroup.addEventListener('click', (e) => {
   renderSizeGroup();
   refreshMenu();
 });
+
+// 本次用餐人数
+el.peopleGroup.addEventListener('click', (e) => {
+  const btn = e.target.closest('.s-size');
+  if (!btn) return;
+  const n = Number(btn.dataset.people);
+  if (!PEOPLE.includes(n)) return;
+  settings.currentMealHouseholdSize = n;
+  saveSettings();
+  renderPeopleGroup();
+  recompute();
+  renderStaple();
+  renderNutrition();
+});
+
+// 恢复为家庭成员数
+el.peopleFollow.addEventListener('click', () => {
+  settings.currentMealHouseholdSize = null;
+  saveSettings();
+  renderPeopleGroup();
+  recompute();
+  renderStaple();
+  renderNutrition();
+});
+
+// 成员列表：编辑 / 启停 / 删除（删除两步确认）
+el.memberList.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const row = btn.closest('.member-row');
+  const id = row?.dataset.id;
+  if (!id) return;
+
+  switch (btn.dataset.act) {
+    case 'edit': {
+      const m = findMember(id);
+      if (m) openMemberSheet(m);
+      break;
+    }
+    case 'toggle':
+      toggleMember(id);
+      break;
+    case 'del':
+      state.pendingDeleteId = id;
+      renderMembers();
+      break;
+    case 'cancel-del':
+      state.pendingDeleteId = null;
+      renderMembers();
+      break;
+    case 'confirm-del':
+      deleteMember(id);
+      break;
+    default:
+      break;
+  }
+});
+
+el.memberAdd.addEventListener('click', () => {
+  if (settings.members.length >= MAX_MEMBERS) {
+    el.memberErr.textContent = `最多添加 ${MAX_MEMBERS} 位家庭成员`;
+    return;
+  }
+  el.memberErr.textContent = '';
+  openMemberSheet(null);
+});
+
+el.memberForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  saveMember();
+});
+el.memberCancel.addEventListener('click', closeMemberSheet);
+el.memberClose.addEventListener('click', closeMemberSheet);
 
 // 主食选择
 el.stapleSelect.addEventListener('change', () => {
@@ -803,28 +1152,22 @@ el.kwClear.addEventListener('click', () => {
   afterKeywordsChange();
 });
 
-// 健康资料
-for (const [node, field] of [
-  [el.hpSex, 'sex'], [el.hpAge, 'age'], [el.hpHeight, 'height'],
-  [el.hpWeight, 'weight'], [el.hpActivity, 'activity'],
+// 点遮罩关闭（点面板本身不关）
+for (const [sheetEl, close] of [
+  [el.detail, closeDetail],
+  [el.settings, closeSettings],
+  [el.member, closeMemberSheet],
 ]) {
-  node.addEventListener('change', () => {
-    const raw = node.value;
-    settings.healthProfile[field] = (field === 'sex' || field === 'activity') ? raw : numOrEmpty(raw);
-    saveSettings();
-    renderHealth();
-  });
-}
-
-for (const [sheetEl, close] of [[el.detail, closeDetail], [el.settings, closeSettings]]) {
   sheetEl.addEventListener('click', (e) => {
     if (e.target === sheetEl) close();
   });
 }
 
+// Esc 从最上层的面板开始关
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!el.settings.hidden) closeSettings();
+  if (!el.member.hidden) closeMemberSheet();
+  else if (!el.settings.hidden) closeSettings();
   else closeDetail();
 });
 
@@ -834,6 +1177,9 @@ document.addEventListener('keydown', (e) => {
 
 async function boot() {
   el.heroSub.textContent = heroSubText();
+
+  el.mfActivity.innerHTML = ACTIVITY_LEVELS
+    .map((a) => `<option value="${esc(a.key)}">${esc(a.label)}　${esc(a.hint)}</option>`).join('');
 
   if (location.protocol === 'file:') {
     renderNotice(
@@ -868,7 +1214,7 @@ async function boot() {
     const missing = MENU_ROLES.filter((role) => !state.pools[role].length);
     if (missing.length) throw new Error(`缺少菜谱池：${missing.join('、')}`);
 
-    refreshMenu();
+    applyHealthToggle();
   } catch (err) {
     console.error('[今晚吃什么] 数据加载失败：', err);
     renderNotice(

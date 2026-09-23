@@ -261,26 +261,30 @@ export const ACTIVITY_LEVELS = [
 ];
 
 /**
- * 由个人资料算出各项参考值。
+ * 由**一位家庭成员**的资料算出各项参考值。
+ * 每个成员独立计算，不把全家混成一个数字。
+ *
  * BMI  = 体重 / 身高²
  * BMR  = Mifflin-St Jeor
  * TDEE = BMR × 活动系数
+ *
+ * @param {{gender, age, heightCm, weightKg, activityLevel}} member
  * @returns null 表示资料不完整
  */
-export function healthMetrics(profile) {
-  const age = Number(profile?.age);
-  const height = Number(profile?.height);
-  const weight = Number(profile?.weight);
-  const sex = profile?.sex;
-  const activity = ACTIVITY_LEVELS.find((a) => a.key === profile?.activity);
+export function healthMetrics(member) {
+  const age = Number(member?.age);
+  const height = Number(member?.heightCm);
+  const weight = Number(member?.weightKg);
+  const gender = member?.gender;
+  const activity = ACTIVITY_LEVELS.find((a) => a.key === member?.activityLevel);
 
-  if (!(age > 0 && height > 0 && weight > 0) || !sex || !activity) return null;
+  if (!(age > 0 && height > 0 && weight > 0) || !gender || !activity) return null;
 
   const m = height / 100;
   const bmi = weight / (m * m);
 
   // Mifflin-St Jeor
-  const bmr = 10 * weight + 6.25 * height - 5 * age + (sex === 'male' ? 5 : -161);
+  const bmr = 10 * weight + 6.25 * height - 5 * age + (gender === 'male' ? 5 : -161);
   const tdee = bmr * activity.factor;
 
   return {
@@ -298,6 +302,42 @@ export function healthMetrics(profile) {
     fatLow: (tdee * 0.2) / 9,
     fatHigh: (tdee * 0.35) / 9,
   };
+}
+
+// ------------------------------------------------------------------
+// 家庭成员：字段取值范围与校验
+// ------------------------------------------------------------------
+
+export const MAX_MEMBERS = 8;
+
+/** 各字段的合理区间。表单校验和读取本地存储时共用同一份，避免两处规则不一致。 */
+export const MEMBER_LIMITS = {
+  age: { min: 10, max: 100, label: '年龄', unit: '岁' },
+  heightCm: { min: 80, max: 230, label: '身高', unit: 'cm' },
+  weightKg: { min: 25, max: 200, label: '体重', unit: 'kg' },
+};
+
+export const NAME_MAX = 12;
+
+/**
+ * 校验一位成员。返回 null 表示通过，否则返回给用户看的错误说明。
+ * @returns {string | null}
+ */
+export function validateMember(m) {
+  const name = String(m?.name ?? '').trim();
+  if (!name) return '请填写称呼';
+  if (name.length > NAME_MAX) return `称呼不要超过 ${NAME_MAX} 个字`;
+  if (m?.gender !== 'male' && m?.gender !== 'female') return '请选择性别';
+  if (!ACTIVITY_LEVELS.some((a) => a.key === m?.activityLevel)) return '请选择活动水平';
+
+  for (const [field, lim] of Object.entries(MEMBER_LIMITS)) {
+    const v = Number(m?.[field]);
+    if (!Number.isFinite(v) || v <= 0) return `请填写${lim.label}`;
+    if (v < lim.min || v > lim.max) {
+      return `${lim.label}请填 ${lim.min} – ${lim.max} ${lim.unit}`;
+    }
+  }
+  return null;
 }
 
 /** 普通成年人日常膳食参考（中国居民膳食指南的常识性条目，非个人化处方） */

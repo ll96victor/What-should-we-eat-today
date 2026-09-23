@@ -11,7 +11,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildIndex, parseIngredient, estimateRecipe, summarizeMeal, nutritionOf,
-  healthMetrics, fmt,
+  healthMetrics, validateMember, fmt,
 } from '../nutrition.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -105,20 +105,37 @@ for (const [key, grams] of [['rice-cooked', 100], ['rice-cooked', 300], ['rice-c
 w('');
 w('=== 6. 健康计算核对（手算验证） ===');
 const cases = [
-  { sex: 'male', age: 30, height: 175, weight: 70, activity: 'sedentary' },
-  { sex: 'female', age: 45, height: 160, weight: 55, activity: 'moderate' },
-  { sex: 'male', age: 60, height: 170, weight: 85, activity: 'active' },
+  { name: '我', gender: 'male', age: 30, heightCm: 175, weightKg: 70, activityLevel: 'sedentary' },
+  { name: '老婆', gender: 'female', age: 45, heightCm: 160, weightKg: 55, activityLevel: 'moderate' },
+  { name: '爸', gender: 'male', age: 60, heightCm: 170, weightKg: 85, activityLevel: 'active' },
 ];
 for (const c of cases) {
   const m = healthMetrics(c);
-  const m2 = c.height / 100;
-  const expectBmi = c.weight / (m2 * m2);
-  const expectBmr = 10 * c.weight + 6.25 * c.height - 5 * c.age + (c.sex === 'male' ? 5 : -161);
-  w(`  ${c.sex} ${c.age}岁 ${c.height}cm ${c.weight}kg ${c.activity}`);
+  const m2 = c.heightCm / 100;
+  const expectBmi = c.weightKg / (m2 * m2);
+  const expectBmr = 10 * c.weightKg + 6.25 * c.heightCm - 5 * c.age + (c.gender === 'male' ? 5 : -161);
+  w(`  ${c.name}（${c.gender} ${c.age}岁 ${c.heightCm}cm ${c.weightKg}kg ${c.activityLevel}）`);
   w(`    BMI=${fmt(m.bmi, 2)} (手算 ${fmt(expectBmi, 2)}) 分级=${m.bmiCategory.label}`);
   w(`    BMR=${fmt(m.bmr)} (手算 ${fmt(expectBmr)})  TDEE=${fmt(m.tdee)}`);
   w(`    蛋白质=${fmt(m.proteinG, 1)}g  碳水 ${fmt(m.carbsLow)}–${fmt(m.carbsHigh)}g  脂肪 ${fmt(m.fatLow)}–${fmt(m.fatHigh)}g`);
 }
+
+w('');
+w('=== 6b. 成员校验规则 ===');
+const badCases = [
+  [{ name: '', gender: 'male', age: 30, heightCm: 175, weightKg: 70, activityLevel: 'sedentary' }, '空称呼应被拒'],
+  [{ name: '我', gender: 'male', age: 5, heightCm: 175, weightKg: 70, activityLevel: 'sedentary' }, '年龄过小应被拒'],
+  [{ name: '我', gender: 'male', age: 30, heightCm: 300, weightKg: 70, activityLevel: 'sedentary' }, '身高过高应被拒'],
+  [{ name: '我', gender: 'male', age: 30, heightCm: 175, weightKg: 500, activityLevel: 'sedentary' }, '体重过重应被拒'],
+  [{ name: '我', gender: 'x', age: 30, heightCm: 175, weightKg: 70, activityLevel: 'sedentary' }, '性别非法应被拒'],
+  [{ name: '我', gender: 'male', age: 30, heightCm: 175, weightKg: 70, activityLevel: 'nope' }, '活动水平非法应被拒'],
+];
+for (const [m, desc] of badCases) {
+  const err = validateMember(m);
+  w(`  ${desc}：${err ? '✅ 已拒（' + err + '）' : '❌ 未拒'}`);
+}
+const good = validateMember(cases[0]);
+w(`  合法成员应通过：${good === null ? '✅ 通过' : '❌ 被误拒（' + good + '）'}`);
 
 w('');
 w('=== 7. 整餐汇总抽样 ===');
