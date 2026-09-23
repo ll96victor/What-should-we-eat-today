@@ -86,6 +86,10 @@ const ROLE_OVERRIDE = {
   微波炉荷包蛋: 'breakfast', 太阳蛋: 'breakfast', 茶叶蛋: 'breakfast',
   鸡蛋花: 'breakfast', 朱雀汤: 'dessert',
 
+  // —— 上游归在「素菜」，但放进"今晚的素菜"会让人困惑 ——
+  拔丝土豆: 'dessert',     // 主料是 120g 白砂糖裹土豆，本质是甜品
+  水油焖蔬菜: 'other',      // 食材只写「叶菜类蔬菜」，是一套烹调技法而非一道具体的菜
+
   // —— 汤：按主料判定，肉汤进蛋白池，素汤进蔬菜池，粥类不进池 ——
   勾芡香菇汤: 'vegetable', 奶油蘑菇汤: 'vegetable', 金针菇汤: 'vegetable',
   山药南瓜炖鸡汤: 'protein', 排骨山药玉米汤: 'protein', 排骨苦瓜汤: 'protein',

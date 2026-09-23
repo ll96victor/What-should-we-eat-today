@@ -164,6 +164,13 @@ body.is-locked { overflow: hidden; }
 
 .chip--plain { background: var(--line); color: var(--text-soft); }
 
+/* 卡片头部的次级信息（原始分类：水产 / 汤羹 / 早餐…），弱于主标签 */
+.card-cat {
+  font-size: 12px;
+  color: var(--text-soft);
+  letter-spacing: 0.02em;
+}
+
 .stars {
   font-size: 12px;
   color: #d9a441;

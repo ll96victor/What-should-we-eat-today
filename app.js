@@ -13,6 +13,21 @@ const MENU_ROLES = ['protein', 'vegetable'];
 
 const ROLE_EMOJI = { protein: '🍖', vegetable: '🥬' };
 
+/** 这道菜在「一荤一素」里扮演的角色。用词和产品对外的说法保持一致。 */
+const ROLE_LABEL = { protein: '荤菜', vegetable: '素菜' };
+
+/** 角色的展示名：没在图例里的角色就退回原始分类名 */
+function roleLabel(recipe) {
+  return ROLE_LABEL[recipe.menuRole] || recipe.categoryName;
+}
+
+/** 次级分类标签。和角色名重复时（例如「素菜 / 素菜」）就不显示，避免啰嗦。 */
+function categoryTag(recipe) {
+  const label = roleLabel(recipe);
+  if (label === recipe.categoryName) return '';
+  return `<span class="card-cat">${esc(recipe.categoryName)}</span>`;
+}
+
 const state = {
   /** @type {Record<string, object[]>} 按 menuRole 分好的菜谱池 */
   pools: { protein: [], vegetable: [] },
@@ -117,7 +132,8 @@ function cardHtml(recipe) {
       ${cardVisual(recipe)}
       <span class="card-main">
         <span class="card-head">
-          <span class="chip">${esc(recipe.categoryName)}</span>
+          <span class="chip">${esc(roleLabel(recipe))}</span>
+          ${categoryTag(recipe)}
           ${stars}
         </span>
         <span class="card-name">${esc(recipe.name)}</span>
@@ -166,11 +182,12 @@ function openDetail(recipe) {
     ? `<p>参考：<a href="${esc(recipe.referenceUrl)}" target="_blank" rel="noopener noreferrer">${esc(recipe.referenceName || recipe.referenceUrl)}</a></p>`
     : '';
 
-  el.detailChip.textContent = recipe.categoryName;
+  el.detailChip.textContent = roleLabel(recipe);
   el.detailBody.innerHTML = `
     <h2 class="d-name" id="detail-name">${esc(recipe.name)}</h2>
     <div class="d-meta">
-      <span class="chip chip--plain">${esc(recipe.categoryName)}</span>
+      <span class="chip chip--plain">${esc(roleLabel(recipe))}</span>
+      ${categoryTag(recipe)}
       ${stars}
     </div>
     ${recipe.description ? `<p class="d-desc">${esc(recipe.description)}</p>` : ''}

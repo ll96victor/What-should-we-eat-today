@@ -19,3 +19,6 @@ node_modules/
 Thumbs.db
 .vscode/
 .idea/
+
+# 改动前的实现文件备份（my-coding-helper 工作流要求；git 已完整保存每个版本，故不入库避免重复）
+history/
