@@ -1,0 +1,206 @@
+/* 设置页样式 */
+
+.s-intro {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  padding: 0 4rpx 16rpx;
+}
+
+.s-block {
+  background: var(--surface);
+  border-radius: 24rpx;
+  padding: 26rpx 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+}
+
+.s-label {
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 14rpx;
+}
+
+.s-help {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 10rpx;
+}
+
+.s-note {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 12rpx;
+}
+
+/* ---------- 数值选择 ---------- */
+
+.s-sizes {
+  display: flex;
+}
+
+.s-size {
+  flex: 1;
+  text-align: center;
+  font-size: 30rpx;
+  padding: 16rpx 0;
+  margin-right: 14rpx;
+  border-radius: 16rpx;
+  background: #f7f1ea;
+  color: var(--text);
+}
+
+.s-size:last-child { margin-right: 0; }
+
+.s-size.is-active {
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+.s-sizes--8 .s-size,
+.s-sizes--5 .s-size {
+  font-size: 26rpx;
+  padding: 14rpx 0;
+  margin-right: 10rpx;
+}
+
+/* ---------- 屏蔽关键词 ---------- */
+
+.s-add {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+
+.s-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 28rpx;
+  padding: 16rpx 20rpx;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+}
+
+.s-add-btn {
+  flex-shrink: 0;
+  margin-left: 14rpx;
+  font-size: 28rpx;
+  color: #fff;
+  background: var(--brand);
+  border-radius: 16rpx;
+  padding: 16rpx 30rpx;
+  line-height: 1.4;
+}
+
+.s-err {
+  display: block;
+  font-size: 22rpx;
+  color: var(--brand-dark);
+  margin-top: 10rpx;
+}
+
+.s-chips {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 12rpx;
+}
+
+.s-chip {
+  display: flex;
+  align-items: center;
+  background: #f7f1ea;
+  border-radius: 999rpx;
+  padding: 6rpx 8rpx 6rpx 20rpx;
+  margin: 8rpx 12rpx 0 0;
+}
+
+.s-chip-text {
+  font-size: 24rpx;
+}
+
+.s-chip-x {
+  font-size: 30rpx;
+  color: var(--text-soft);
+  padding: 0 14rpx;
+  line-height: 1;
+}
+
+.s-empty {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  margin-top: 14rpx;
+}
+
+.s-clear {
+  display: inline-block;
+  font-size: 24rpx;
+  color: var(--brand);
+  margin-top: 14rpx;
+  padding: 6rpx 0;
+}
+
+/* ---------- 开关 ---------- */
+
+.s-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.s-switch-text {
+  font-size: 30rpx;
+  color: var(--text-soft);
+}
+
+/* ---------- 入口 ---------- */
+
+.s-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16rpx;
+  padding: 20rpx 22rpx;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+}
+
+.s-entry--pressed { background: #efe6dc; }
+
+.s-entry-text { font-size: 28rpx; }
+.s-entry-arrow { font-size: 34rpx; color: var(--text-soft); line-height: 1; }
+
+/* ---------- 日常饮食参考 ---------- */
+
+.diet-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+  padding: 8rpx 0;
+  border-bottom: 2rpx solid var(--line);
+}
+
+.diet-row:last-child { border-bottom: none; }
+
+.diet-item { color: var(--text); }
+.diet-amount { color: var(--text-soft); }
+
+/* ---------- 边界说明 ---------- */
+
+.s-boundary {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.75;
+  margin-top: 16rpx;
+  padding: 0 4rpx;
+}
+
+.b {
+  color: var(--text);
+  font-weight: 600;
+}

@@ -1,0 +1,145 @@
+<!-- 家庭成员页：列表 + 新增/编辑共用表单 -->
+
+<!-- ============ 列表视图 ============ -->
+<view class="wrap" wx:if="{{mode === 'list'}}">
+
+  <text class="s-intro">每位成员各有一份独立的「每日能量参考」，可以一位用自动估算、另一位自己设定，彼此互不影响。</text>
+
+  <view class="m-card {{item.enabled ? '' : 'is-off'}}" wx:for="{{members}}" wx:key="id">
+
+    <view class="m-head">
+      <text class="m-name">{{item.name}}</text>
+      <text class="m-tag">{{item.bmiLabel}}</text>
+    </view>
+    <text class="m-meta">{{item.meta}}{{item.enabled ? '' : '　·　已停用'}}</text>
+
+    <block wx:if="{{item.hasMetrics}}">
+      <view class="mh-energy">
+        <text class="mh-energy-label">每日能量参考</text>
+        <view class="mh-energy-right">
+          <text class="mh-energy-val">{{item.energyText}}</text>
+          <text class="mh-energy-src">{{item.energyLabel}}</text>
+        </view>
+      </view>
+      <text class="mh-energy-note">{{item.energyNote}}</text>
+
+      <view class="mh-grid">
+        <view class="mh-cell">
+          <text class="mh-cell-l">BMI</text>
+          <text class="mh-cell-v">{{item.bmi}}</text>
+        </view>
+        <view class="mh-cell">
+          <text class="mh-cell-l">基础代谢</text>
+          <text class="mh-cell-v">{{item.bmr}} <text class="mh-cell-u">kcal</text></text>
+        </view>
+      </view>
+
+      <text class="mh-sub">BMI 与基础代谢都是按公式估的粗略值，不代表你该吃多少。</text>
+      <text class="mh-sub" wx:if="{{item.foot1}}">{{item.foot1}}</text>
+      <text class="mh-sub">{{item.foot2}}</text>
+    </block>
+
+    <text class="mh-empty" wx:else>这位成员的资料没填完整，暂时算不出参考值。</text>
+
+    <!-- 操作：删除要两步确认 -->
+    <view class="m-acts" wx:if="{{confirmId !== item.id}}">
+      <view class="m-btn" data-id="{{item.id}}" bindtap="onEdit">编辑</view>
+      <view class="m-btn" data-id="{{item.id}}" bindtap="onToggle">{{item.enabled ? '停用' : '启用'}}</view>
+      <view class="m-btn m-btn--danger" data-id="{{item.id}}" bindtap="onAskDelete">删除</view>
+    </view>
+    <view class="m-confirm" wx:else>
+      <text class="m-confirm-text">删除「{{item.name}}」？</text>
+      <view class="m-btn" bindtap="onCancelDelete">取消</view>
+      <view class="m-btn m-btn--danger" data-id="{{item.id}}" bindtap="onConfirmDelete">删除</view>
+    </view>
+
+  </view>
+
+  <text class="s-empty" wx:if="{{!members.length}}">还没有添加家庭成员</text>
+
+  <view class="m-add" bindtap="onAdd">＋ 添加成员</view>
+  <text class="s-help">最多 {{maxMembers}} 位。成员资料只保存在这台手机里，不会上传，也不跨设备同步。</text>
+
+</view>
+
+<!-- ============ 表单视图（新增与编辑共用） ============ -->
+<view class="wrap" wx:else>
+
+  <view class="f-field">
+    <text class="f-label">称呼</text>
+    <input
+      class="f-input"
+      value="{{form.name}}"
+      maxlength="{{nameMax}}"
+      placeholder="如：我、老婆、孩子"
+      bindinput="onFormName"
+    />
+  </view>
+
+  <view class="f-field">
+    <text class="f-label">性别</text>
+    <picker range="{{genderLabels}}" value="{{form.genderIndex}}" bindchange="onFormGender">
+      <view class="f-picker">{{genderLabels[form.genderIndex]}} ▾</view>
+    </picker>
+  </view>
+
+  <view class="f-field">
+    <text class="f-label">年龄（岁）</text>
+    <input class="f-input" type="number" value="{{form.age}}" placeholder="10 – 100" bindinput="onFormAge" />
+  </view>
+
+  <view class="f-field">
+    <text class="f-label">身高（cm）</text>
+    <input class="f-input" type="digit" value="{{form.heightCm}}" placeholder="80 – 230" bindinput="onFormHeight" />
+  </view>
+
+  <view class="f-field">
+    <text class="f-label">体重（kg）</text>
+    <input class="f-input" type="digit" value="{{form.weightKg}}" placeholder="25 – 200" bindinput="onFormWeight" />
+  </view>
+
+  <view class="f-field">
+    <text class="f-label">活动水平</text>
+    <picker range="{{activityLabels}}" value="{{form.activityIndex}}" bindchange="onFormActivity">
+      <view class="f-picker">{{activityLabels[form.activityIndex]}} ▾</view>
+    </picker>
+  </view>
+
+  <view class="f-field">
+    <text class="f-label">每日能量参考</text>
+    <view class="f-modes">
+      <!-- 文案只在 nutrition.js 的 ENERGY_SOURCE 里定义一次，这里不复制第二份 -->
+      <view
+        class="f-mode {{form.energyMode === 'auto' ? 'is-active' : ''}}"
+        data-mode="auto"
+        bindtap="onFormEnergyMode"
+      >{{energyLabels[0]}}</view>
+      <view
+        class="f-mode {{form.energyMode === 'manual' ? 'is-active' : ''}}"
+        data-mode="manual"
+        bindtap="onFormEnergyMode"
+      >{{energyLabels[1]}}</view>
+    </view>
+    <text class="f-help">自动估算：按本人资料用公开公式算出的粗略值。自己设定：你自己填的数字，程序不对它做健康判断。它表示的是一整天（含早餐、午餐、晚餐及其他摄入）的参考量。</text>
+  </view>
+
+  <view class="f-field" wx:if="{{form.energyMode === 'manual'}}">
+    <text class="f-label">自己设定的每日能量（kcal / 天）</text>
+    <input
+      class="f-input"
+      type="number"
+      value="{{form.dailyEnergyManual}}"
+      placeholder="{{energyLimits.min}} – {{energyLimits.max}}"
+      bindinput="onFormEnergyManual"
+    />
+    <text class="f-help">这个范围只是挡住明显误输入，不是营养学标准，也不用来判断你设的值是否健康。</text>
+  </view>
+
+  <text class="f-err" wx:if="{{formErr}}">{{formErr}}</text>
+
+  <view class="f-actions">
+    <view class="f-btn f-btn--ghost" bindtap="onFormCancel">取消</view>
+    <view class="f-btn f-btn--primary" bindtap="onFormSave">保存</view>
+  </view>
+
+</view>

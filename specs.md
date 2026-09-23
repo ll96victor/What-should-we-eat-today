@@ -247,6 +247,13 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 - **无运行时外部依赖**：中国大陆网络下不开代理即可使用全部核心功能
 - **部署**：同一套代码同时适配 GitHub Pages 与腾讯云 CloudBase 静态托管，不维护第二份
 
+小程序端（V2）在同一套约束下：
+
+- **原生微信小程序**，无 TypeScript、无 npm、无第三方框架
+- 语料与逻辑**由脚本从 Web 版生成或移植**，不手工维护第二份
+- 不发任何网络请求，数据随包分发，**飞行模式下核心功能可用**
+- **不接入 CloudBase / 云开发**：核心流程不需要服务端，设置存本机
+
 ---
 
 ## 6. 数据与接口契约
@@ -473,6 +480,46 @@ STAPLE_PER_PERSON = 150                    // 主食自动量：人数 × 150 g
 BLOCK_FIELDS = ['name', 'categoryName', 'description']  // 另加 ingredients、tags；不含 steps / tips
 ```
 
+### 6.6 小程序端共享逻辑（`miniprogram/lib/`）
+
+小程序端**不重复设计业务规则**，而是沿用同一份契约。以下函数在 Web 与小程序两端
+**语义必须一致**（函数名可以不同，行为不可以）：
+
+**随机菜单与屏蔽**（Web：`app.js`；小程序：`miniprogram/lib/menu.js`，基线 `deabc45`）
+
+```text
+isBlocked(recipe, blockedKeywords)        → boolean
+rebuildAvailable(pools, blockedKeywords)  → { available, blocked }
+parseKeywordInput(raw)                    → string[]   // 去空、去重
+menuPlan(available, mealSize)             → { need, short, ok }
+sampleDistinct(pool, n)                   → recipe[] | null
+sameMenu(a, b)                            → boolean
+pickMenu(available, mealSize, prev)       → recipe[] | null   // 池子不足返回 null
+buildPools(recipes)                       → { protein: [], vegetable: [] }
+```
+
+**硬性不变量**（两端都必须成立，由 `tools/check-miniprogram.mjs` 的 C 组断言守住）：
+
+```text
+每桌荤素各占一半，且总数等于 mealSize
+同一桌不出现重复 id
+换一组优先整桌换掉，至少不与上一桌完全相同
+屏蔽匹配字段 = name / categoryName / description / ingredients / tags，不含 steps / tips
+池子不足 → 返回 null，不死循环、不返回残缺菜单、不放宽屏蔽规则
+```
+
+**设置与存储**（Web：`localStorage`；小程序：`wx.setStorageSync`）
+
+```text
+键名（两端一致）：what-should-we-eat-today.settings
+结构与默认值：见 6.1
+读取容错：逐字段「读不到就用默认值」，不做一次性迁移写入
+```
+
+**产物生成**：`miniprogram/data/*.js` 与 `miniprogram/lib/nutrition.js` 由
+`tools/build-miniprogram.mjs` 从 `data/*.json` 与 `nutrition.js` 生成，
+**不是手工维护的第二份事实源**；数据一旦变化必须重新生成，断言会拦住不一致。
+
 ---
 
 ## 7. 设计原则
@@ -489,9 +536,12 @@ BLOCK_FIELDS = ['name', 'categoryName', 'description']  // 另加 ingredients、
 
 ## 8. 明确不做
 
-微信小程序 · 手机端增删菜谱 · 数据库 · 登录注册 · 收藏 · 历史记录 ·
+手机端增删菜谱 · 数据库 · 登录注册 · 收藏 · 历史记录 ·
 智能推荐 · 食材库存 · 购物清单 · AI 推荐 · 家庭成员账号 · 多用户同步 ·
 评论 · 社交分享 · 图片 CDN
+
+> 「微信小程序」原本也在这份清单里，已由 V2 实现（见第 11 章），故从此处移除；
+> 其余各项在小程序端同样没有实现。
 
 家庭成员相关的额外禁止项：
 账户体系 · 云端同步 · 把成员资料上传到任何服务端
@@ -539,13 +589,30 @@ BLOCK_FIELDS = ['name', 'categoryName', 'description']  // 另加 ingredients、
 |---|---|
 | GitHub Pages | ✅ 已部署：https://ll96victor.github.io/What-should-we-eat-today/ |
 | 腾讯云 CloudBase | ✅ 已部署（2026-09-23）：https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com<br>环境 `what-should-we-eat`（ID `what-should-we-eat-d0cym0b8ea64c`，体验版），只开静态网站托管 |
+| 微信小程序（V2） | ⏳ 代码已完成，**尚未在微信开发者工具 / 真机上验证**。目标形态是开发版 / 测试版，不涉及发布、备案或云资源。 |
 
 ---
 
-## 11. V2 方向
+## 11. 小程序端（V2）与后续方向
+
+**V2 = 微信小程序版**，实现位置 `miniprogram/`，与 Web 版共用同一份数据与业务规则
+（见 6.6）。V2 复用了 `data/recipes.json` 与 `menuRole` 这套业务逻辑，
+**没有另建菜谱系统**。
+
+V2 的范围：核心菜单（1 荤 1 素 / 2·4·6·8 道、换一组、同桌不重复、屏蔽关键词）、
+菜谱详情、健康与营养（默认关闭，开启后含家庭成员、每日能量参考、主食、这桌菜估算）。
+
+V2 明确不做（留给 V3 或永久不做）：
 
 ```text
-手机维护菜谱 → 收藏 → 历史菜单 → 近期不重复 → 偏好 → 微信小程序
+手机维护菜谱 · 增删改菜谱 · 收藏 · 历史菜单 · 近期不重复 · 偏好 · AI 推荐 ·
+食材库存 · 购物清单 · 社交 · 评论 · 多用户账号 · 家庭成员云端账号 · 多设备同步 ·
+完整后台管理 · 正式发布 / 搜索上线 / 备案 / 商业化
 ```
 
-后续小程序应复用 `data/recipes.json` 与 `menuRole` 这套业务逻辑，而不是另建一套菜谱系统。
+```text
+V3 方向：手机维护菜谱 → 收藏 → 历史菜单 → 近期不重复 → 偏好
+```
+
+若 V3 要做跨设备同步或云端维护菜谱，才需要引入数据库与账号体系；
+在那之前不引入后端，也不提前搭架构。

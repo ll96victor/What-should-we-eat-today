@@ -20,5 +20,8 @@ Thumbs.db
 .vscode/
 .idea/
 
+# 微信开发者工具的本地私有配置（含本机路径与个人设置，不共享）
+miniprogram/project.private.config.json
+
 # 改动前的实现文件备份（my-coding-helper 工作流要求；git 已完整保存每个版本，故不入库避免重复）
 history/

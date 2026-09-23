@@ -1,0 +1,259 @@
+/* ============================================================
+   今天吃什么 · 微信小程序版 · 全局样式
+   ------------------------------------------------------------
+   配色与视觉语言继承 Web 版 styles.css，布局按小程序重写：
+   rpx 单位、无 hover 态、用页面跳转代替全屏遮罩层。
+   ============================================================ */
+
+page {
+  --bg: #fdf7f0;
+  --surface: #ffffff;
+  --text: #2c2320;
+  --text-soft: #8a7c74;
+  --line: #efe4d9;
+  --brand: #e2552b;
+  --brand-dark: #c2451f;
+  --protein-ink: #b6431c;
+  --veg-ink: #2f7a48;
+
+  background: var(--bg);
+  color: var(--text);
+  font-size: 30rpx;
+  line-height: 1.6;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.wrap {
+  padding: 20rpx 28rpx 60rpx;
+}
+
+/* ---------- 页头 ---------- */
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 4rpx 24rpx;
+}
+
+.hero-sub {
+  font-size: 28rpx;
+  color: var(--text-soft);
+}
+
+.entry {
+  font-size: 26rpx;
+  color: var(--brand);
+  padding: 8rpx 20rpx;
+  border: 2rpx solid var(--brand);
+  border-radius: 999rpx;
+  line-height: 1.4;
+}
+
+.entry--plain {
+  border-color: var(--line);
+  color: var(--text-soft);
+}
+
+/* ---------- 菜品卡片 ---------- */
+
+.menu {
+  display: block;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border-radius: 28rpx;
+  padding: 26rpx 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+  border-left: 10rpx solid transparent;
+}
+
+.card--protein { border-left-color: #ffc9ad; }
+.card--vegetable { border-left-color: #c2e6c9; }
+
+.card-emoji {
+  font-size: 44rpx;
+  width: 76rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.card-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0 16rpx;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.chip {
+  font-size: 22rpx;
+  padding: 2rpx 14rpx;
+  border-radius: 999rpx;
+  margin-right: 12rpx;
+  line-height: 1.5;
+}
+
+.card--protein .chip {
+  background: #ffe3d3;
+  color: var(--protein-ink);
+}
+
+.card--vegetable .chip {
+  background: #e2f3e4;
+  color: var(--veg-ink);
+}
+
+.card-cat {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  margin-right: 12rpx;
+}
+
+.stars {
+  font-size: 22rpx;
+  color: #f0a03c;
+  letter-spacing: 2rpx;
+}
+
+.card-name {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.card-ing {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  margin-top: 6rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+
+.card-kcal {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  margin-bottom: 6rpx;
+}
+
+.card-arrow {
+  font-size: 36rpx;
+  color: var(--text-soft);
+  line-height: 1;
+}
+
+/* ---------- 主操作 ---------- */
+
+.actions {
+  margin-top: 8rpx;
+}
+
+.btn-reroll {
+  width: 100%;
+  background: var(--brand);
+  color: #fff;
+  font-size: 32rpx;
+  font-weight: 600;
+  border-radius: 999rpx;
+  padding: 24rpx 0;
+  line-height: 1.4;
+  border: none;
+}
+
+.btn-reroll::after { border: none; }
+
+.btn-reroll[disabled] {
+  background: #e8ddd4;
+  color: #a99c93;
+}
+
+.hint {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  text-align: center;
+}
+
+/* ---------- 提示 / 报错块 ---------- */
+
+.notice {
+  background: var(--surface);
+  border-radius: 24rpx;
+  padding: 32rpx 28rpx;
+  font-size: 28rpx;
+  color: var(--text);
+  line-height: 1.7;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+}
+
+.notice-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 600;
+  margin-bottom: 10rpx;
+}
+
+.notice-line {
+  display: block;
+  font-size: 26rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 8rpx;
+}
+
+/* ---------- 面板（主食 / 这桌菜估算） ---------- */
+
+.panel {
+  background: var(--surface);
+  border-radius: 24rpx;
+  padding: 26rpx 24rpx;
+  margin-top: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 16rpx;
+}
+
+.panel-foot {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 14rpx;
+}
+
+.panel-note {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 12rpx;
+}
+
+/* ---------- 通用文字 ---------- */
+
+.muted { color: var(--text-soft); }
+.small { font-size: 24rpx; }
+.strong { font-weight: 600; }

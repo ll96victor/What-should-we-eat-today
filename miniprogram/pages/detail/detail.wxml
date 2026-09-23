@@ -1,0 +1,77 @@
+<!-- 做法详情页 -->
+<view class="wrap">
+
+  <view class="notice" wx:if="{{notFound}}">
+    <text class="notice-title">没找到这道菜</text>
+    <text class="notice-line">菜谱数据里没有这个 id，可能是数据重建后旧链接失效了。返回首页即可。</text>
+  </view>
+
+  <block wx:if="{{recipe}}">
+
+    <text class="d-name">{{recipe.name}}</text>
+
+    <view class="d-meta">
+      <text class="chip chip--{{recipe.roleClass}}">{{recipe.roleLabel}}</text>
+      <text class="d-cat" wx:if="{{recipe.categoryName}}">{{recipe.categoryName}}</text>
+      <text class="stars" wx:if="{{recipe.stars}}">{{recipe.stars}}</text>
+    </view>
+
+    <text class="d-desc" wx:if="{{recipe.description}}">{{recipe.description}}</text>
+
+    <!-- 营养估算：只在「健康与营养」开启时出现 -->
+    <view class="d-section" wx:if="{{nutrition}}">
+      <view class="d-h3">营养估算</view>
+
+      <text class="nutri-none" wx:if="{{nutrition.empty}}">这道菜的食材没有可用的营养数据，暂时无法估算。</text>
+
+      <view class="nutri-box" wx:else>
+        <text class="nutri-scope">按菜谱所写用量的整份估算</text>
+        <text class="nutri-kcal">约 {{nutrition.kcal}} <text class="nutri-unit">kcal</text></text>
+        <view class="nutri-macros">
+          <view class="nutri-macro"><text class="nm-l">蛋白质</text><text class="nm-v">{{nutrition.protein}} g</text></view>
+          <view class="nutri-macro"><text class="nm-l">碳水</text><text class="nm-v">{{nutrition.carbs}} g</text></view>
+          <view class="nutri-macro"><text class="nm-l">脂肪</text><text class="nm-v">{{nutrition.fat}} g</text></view>
+        </view>
+        <text class="nutri-scope-note">这是这道菜谱写出来的整份量，不是某个人实际吃进去的量；你实际买多少、实际下锅多少，营养值按同比例变化。</text>
+        <view class="nutri-cov">
+          <text class="nutri-tag nutri-tag--{{nutrition.status}}">{{nutrition.statusText}}</text>
+          <text class="nutri-cov-text">{{nutrition.coverage}}</text>
+        </view>
+        <text class="nutri-note" wx:for="{{nutrition.notes}}" wx:key="*this">{{item}}</text>
+      </view>
+    </view>
+
+    <view class="d-section" wx:if="{{recipe.ingredients.length}}">
+      <view class="d-h3">食材</view>
+      <view class="d-li" wx:for="{{recipe.ingredients}}" wx:key="*this">{{item}}</view>
+    </view>
+
+    <view class="d-section" wx:if="{{recipe.steps.length}}">
+      <view class="d-h3">做法</view>
+      <view class="d-step" wx:for="{{recipe.steps}}" wx:key="*this">
+        <text class="d-step-no">{{index + 1}}</text>
+        <text class="d-step-text">{{item}}</text>
+      </view>
+    </view>
+
+    <view class="d-section" wx:if="{{recipe.tips.length}}">
+      <view class="d-h3">小贴士</view>
+      <view class="d-li d-li--tips" wx:for="{{recipe.tips}}" wx:key="*this">{{item}}</view>
+    </view>
+
+    <view class="d-section" wx:if="{{recipe.hasSource}}">
+      <view class="d-h3">来源</view>
+      <view class="d-src" wx:if="{{recipe.sourceUrl}}">
+        <text class="d-src-name">来源：{{recipe.sourceName}}</text>
+        <view class="d-src-copy" data-url="{{recipe.sourceUrl}}" bindtap="onCopyLink">复制链接</view>
+      </view>
+      <view class="d-src" wx:if="{{recipe.referenceUrl}}">
+        <text class="d-src-name">参考：{{recipe.referenceName || recipe.referenceUrl}}</text>
+        <view class="d-src-copy" data-url="{{recipe.referenceUrl}}" bindtap="onCopyLink">复制链接</view>
+      </view>
+      <text class="d-src-hint">小程序里不能直接打开外部网页，复制后可在浏览器中查看。</text>
+    </view>
+
+  </block>
+
+</view>

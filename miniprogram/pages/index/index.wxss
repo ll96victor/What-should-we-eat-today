@@ -1,0 +1,102 @@
+/* 首页特有样式（通用卡片、按钮、面板、通知块见 app.wxss） */
+
+.card--pressed {
+  background: #fdf3ea;
+}
+
+/* ---------- 主食 ---------- */
+
+.staple-row {
+  display: flex;
+  align-items: center;
+}
+
+.staple-picker {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-value {
+  font-size: 30rpx;
+  padding: 14rpx 20rpx;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+}
+
+.staple-input {
+  width: 170rpx;
+  margin-left: 16rpx;
+  padding: 14rpx 16rpx;
+  font-size: 30rpx;
+  text-align: right;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+}
+
+.staple-unit {
+  margin-left: 10rpx;
+  font-size: 26rpx;
+  color: var(--text-soft);
+}
+
+/* ---------- 这桌菜估算 ---------- */
+
+.badge {
+  margin-left: 14rpx;
+  font-size: 20rpx;
+  padding: 2rpx 14rpx;
+  border-radius: 999rpx;
+  font-weight: normal;
+}
+
+.badge--full { background: #e2f3e4; color: var(--veg-ink); }
+.badge--partial { background: #fdeed6; color: #a86a17; }
+.badge--none { background: #f0eae4; color: var(--text-soft); }
+
+.ng-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  padding-bottom: 12rpx;
+  border-bottom: 2rpx solid var(--line);
+}
+
+.ng-body {
+  display: flex;
+  padding-top: 16rpx;
+}
+
+.ng-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ng-col--hl {
+  border-left: 2rpx solid var(--line);
+}
+
+.ng-kcal {
+  font-size: 40rpx;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ng-unit {
+  font-size: 22rpx;
+  font-weight: normal;
+  color: var(--text-soft);
+  margin-left: 4rpx;
+}
+
+.ng-sub {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  margin-top: 4rpx;
+}
+
+.pf-line {
+  display: block;
+}

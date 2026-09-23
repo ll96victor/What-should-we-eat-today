@@ -1,0 +1,295 @@
+/* 家庭成员页样式 */
+
+.s-intro {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  padding: 0 4rpx 16rpx;
+}
+
+.s-empty {
+  display: block;
+  font-size: 26rpx;
+  color: var(--text-soft);
+  text-align: center;
+  padding: 40rpx 0;
+}
+
+.s-help {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 16rpx;
+  padding: 0 4rpx;
+}
+
+/* ---------- 成员卡片 ---------- */
+
+.m-card {
+  background: var(--surface);
+  border-radius: 24rpx;
+  padding: 26rpx 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+}
+
+.m-card.is-off { opacity: 0.6; }
+
+.m-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.m-name {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.m-tag {
+  font-size: 22rpx;
+  color: var(--text-soft);
+  background: #f7f1ea;
+  border-radius: 999rpx;
+  padding: 2rpx 16rpx;
+}
+
+.m-meta {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  margin-top: 6rpx;
+}
+
+/* ---------- 每日能量参考 ---------- */
+
+.mh-energy {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx solid var(--line);
+}
+
+.mh-energy-label {
+  font-size: 24rpx;
+  color: var(--text-soft);
+}
+
+.mh-energy-right {
+  display: flex;
+  align-items: baseline;
+}
+
+.mh-energy-val {
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.mh-energy-src {
+  font-size: 20rpx;
+  color: var(--text-soft);
+  margin-left: 12rpx;
+}
+
+.mh-energy-note {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 6rpx;
+}
+
+/* ---------- BMI / 基础代谢 ---------- */
+
+.mh-grid {
+  display: flex;
+  margin-top: 16rpx;
+}
+
+.mh-cell {
+  flex: 1;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+  padding: 16rpx;
+  margin-right: 14rpx;
+}
+
+.mh-cell:last-child { margin-right: 0; }
+
+.mh-cell-l {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+}
+
+.mh-cell-v {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-top: 4rpx;
+}
+
+.mh-cell-u {
+  font-size: 20rpx;
+  font-weight: normal;
+  color: var(--text-soft);
+}
+
+.mh-sub {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 8rpx;
+}
+
+.mh-empty {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 18rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx solid var(--line);
+}
+
+/* ---------- 操作按钮 ---------- */
+
+.m-acts,
+.m-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 2rpx solid var(--line);
+}
+
+.m-confirm-text {
+  flex: 1;
+  font-size: 24rpx;
+  color: var(--brand-dark);
+}
+
+.m-btn {
+  font-size: 24rpx;
+  padding: 10rpx 24rpx;
+  border-radius: 999rpx;
+  background: #f7f1ea;
+  color: var(--text);
+  margin-left: 12rpx;
+}
+
+.m-btn--danger {
+  background: #ffe3d3;
+  color: var(--protein-ink);
+}
+
+.m-add {
+  text-align: center;
+  font-size: 28rpx;
+  color: var(--brand);
+  border: 2rpx dashed var(--brand);
+  border-radius: 20rpx;
+  padding: 24rpx 0;
+  margin-top: 8rpx;
+}
+
+/* ---------- 表单 ---------- */
+
+.f-field {
+  background: var(--surface);
+  border-radius: 24rpx;
+  padding: 22rpx 24rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+}
+
+.f-label {
+  display: block;
+  font-size: 24rpx;
+  color: var(--text-soft);
+  margin-bottom: 12rpx;
+}
+
+.f-input {
+  font-size: 30rpx;
+  padding: 16rpx 20rpx;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+}
+
+.f-picker {
+  font-size: 30rpx;
+  padding: 16rpx 20rpx;
+  background: #f7f1ea;
+  border-radius: 16rpx;
+}
+
+.f-modes {
+  display: flex;
+}
+
+.f-mode {
+  flex: 1;
+  text-align: center;
+  font-size: 28rpx;
+  padding: 16rpx 0;
+  margin-right: 14rpx;
+  border-radius: 16rpx;
+  background: #f7f1ea;
+}
+
+.f-mode:last-child { margin-right: 0; }
+
+.f-mode.is-active {
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+.f-help {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-top: 12rpx;
+}
+
+.f-err {
+  display: block;
+  font-size: 24rpx;
+  color: var(--brand-dark);
+  padding: 0 4rpx 12rpx;
+}
+
+.f-actions {
+  display: flex;
+  margin-top: 8rpx;
+}
+
+.f-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 30rpx;
+  padding: 22rpx 0;
+  border-radius: 999rpx;
+  margin-right: 16rpx;
+}
+
+.f-btn:last-child { margin-right: 0; }
+
+.f-btn--ghost {
+  background: #f7f1ea;
+  color: var(--text);
+}
+
+.f-btn--primary {
+  background: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}

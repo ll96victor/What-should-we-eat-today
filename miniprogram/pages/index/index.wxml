@@ -1,0 +1,102 @@
+<!-- 首页：打开即见一桌荤素搭配的菜 -->
+<view class="wrap">
+
+  <view class="hero">
+    <text class="hero-sub">{{heroSub}}</text>
+    <view class="entry" bindtap="onOpenSettings">设置</view>
+  </view>
+
+  <!-- 数据没加载成功 / 池子凑不出一桌 -->
+  <view class="notice" wx:if="{{notice}}">
+    <text class="notice-title">{{notice.title}}</text>
+    <text class="notice-line" wx:for="{{notice.lines}}" wx:key="*this">{{item}}</text>
+  </view>
+
+  <!-- 菜单 -->
+  <view class="menu" wx:if="{{!notice}}">
+    <view
+      class="card card--{{item.roleClass}}"
+      wx:for="{{cards}}"
+      wx:key="id"
+      data-id="{{item.id}}"
+      bindtap="onCardTap"
+      hover-class="card--pressed"
+      hover-stay-time="80"
+    >
+      <view class="card-emoji">{{item.emoji}}</view>
+      <view class="card-main">
+        <view class="card-head">
+          <text class="chip">{{item.roleLabel}}</text>
+          <text class="card-cat" wx:if="{{item.categoryName}}">{{item.categoryName}}</text>
+          <text class="stars" wx:if="{{item.stars}}">{{item.stars}}</text>
+        </view>
+        <text class="card-name">{{item.name}}</text>
+        <text class="card-ing">{{item.ingredientsPreview}}</text>
+      </view>
+      <view class="card-side">
+        <text class="card-kcal" wx:if="{{item.kcalText}}">{{item.kcalText}}</text>
+        <text class="card-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="actions" wx:if="{{!notice}}">
+    <button class="btn-reroll" bindtap="onReroll" disabled="{{!canReroll}}">🎲 换一组</button>
+    <text class="hint">{{hint}}</text>
+  </view>
+
+  <!-- 以下两块只在「健康与营养」开启后出现 -->
+  <view class="panel" wx:if="{{staple}}">
+    <view class="panel-title">主食</view>
+    <view class="staple-row">
+      <picker
+        class="staple-picker"
+        range="{{staple.names}}"
+        value="{{staple.index}}"
+        bindchange="onStapleChange"
+      >
+        <view class="picker-value">{{staple.names[staple.index]}} ▾</view>
+      </picker>
+      <input
+        class="staple-input"
+        type="number"
+        value="{{staple.grams}}"
+        bindblur="onStapleGrams"
+      />
+      <text class="staple-unit">g</text>
+    </view>
+    <text class="panel-note">{{staple.note}}</text>
+  </view>
+
+  <view class="panel" wx:if="{{meal}}">
+    <view class="panel-title">
+      <text>这桌菜估算</text>
+      <text class="badge badge--{{meal.status}}">{{meal.statusText}}</text>
+    </view>
+
+    <view class="ng-head">
+      <text class="ng-head-l">按菜谱用量的合计</text>
+      <text class="ng-head-r">÷ {{meal.people}} 人的数学平均</text>
+    </view>
+
+    <view class="ng-body">
+      <view class="ng-col">
+        <text class="ng-kcal">{{meal.totalKcal}}<text class="ng-unit">kcal</text></text>
+        <text class="ng-sub">蛋白 {{meal.totalProtein}}g</text>
+        <text class="ng-sub">碳水 {{meal.totalCarbs}}g</text>
+        <text class="ng-sub">脂肪 {{meal.totalFat}}g</text>
+      </view>
+      <view class="ng-col ng-col--hl">
+        <text class="ng-kcal">{{meal.perKcal}}<text class="ng-unit">kcal</text></text>
+        <text class="ng-sub">蛋白 {{meal.perProtein}}g</text>
+        <text class="ng-sub">碳水 {{meal.perCarbs}}g</text>
+        <text class="ng-sub">脂肪 {{meal.perFat}}g</text>
+      </view>
+    </view>
+
+    <view class="panel-foot">
+      <text class="pf-line" wx:for="{{meal.lines}}" wx:key="*this">{{item}}</text>
+    </view>
+  </view>
+
+</view>

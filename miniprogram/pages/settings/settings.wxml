@@ -1,0 +1,113 @@
+<!-- 设置页 -->
+<view class="wrap">
+
+  <text class="s-intro">改动即时生效，并记在这台手机里。</text>
+
+  <!-- 每餐菜品数量 -->
+  <view class="s-block">
+    <view class="s-label">每餐菜品数量</view>
+    <view class="s-sizes">
+      <view
+        class="s-size {{item.active ? 'is-active' : ''}}"
+        wx:for="{{mealSizes}}"
+        wx:key="value"
+        data-value="{{item.value}}"
+        bindtap="onSizeTap"
+      >{{item.value}}</view>
+    </view>
+    <text class="s-note">{{sizeNote}}</text>
+  </view>
+
+  <!-- 屏蔽关键词 -->
+  <view class="s-block">
+    <view class="s-label">屏蔽关键词</view>
+    <text class="s-help">菜名、分类、食材、标签或简介里出现这些词的菜，不会再被推荐。</text>
+    <view class="s-add">
+      <input
+        class="s-input"
+        value="{{kwInput}}"
+        placeholder="如：鱼、虾、香菜"
+        confirm-type="done"
+        bindinput="onKwInput"
+        bindconfirm="onKwAdd"
+      />
+      <view class="s-add-btn" bindtap="onKwAdd">添加</view>
+    </view>
+    <text class="s-err" wx:if="{{kwErr}}">{{kwErr}}</text>
+    <view class="s-chips">
+      <view class="s-chip" wx:for="{{keywords}}" wx:key="*this">
+        <text class="s-chip-text">{{item}}</text>
+        <text class="s-chip-x" data-kw="{{item}}" bindtap="onKwRemove">×</text>
+      </view>
+    </view>
+    <text class="s-empty" wx:if="{{!keywords.length}}">还没有屏蔽任何关键词</text>
+    <view class="s-clear" wx:if="{{keywords.length}}" bindtap="onKwClear">清空全部</view>
+  </view>
+
+  <!-- 健康与营养总开关：默认关闭 -->
+  <view class="s-block">
+    <view class="s-label">健康与营养</view>
+    <view class="s-switch-row">
+      <text class="s-switch-text">{{hnOn ? '开启' : '关闭'}}</text>
+      <switch checked="{{hnOn}}" bindchange="onToggleHn" color="#e2552b" />
+    </view>
+    <text class="s-help">开启后才会显示家庭成员、主食、本餐营养估算和健康参考。默认关闭，首页保持只看菜。</text>
+  </view>
+
+  <block wx:if="{{hnOn}}">
+
+    <view class="s-block">
+      <view class="s-label">家庭成员</view>
+      <text class="s-help">每位成员的身高体重只保存在这台手机里，不会上传，也不跨设备同步。</text>
+      <view class="s-entry" bindtap="onOpenMembers" hover-class="s-entry--pressed">
+        <text class="s-entry-text">已添加 {{membersCount}} / {{maxMembers}} 位</text>
+        <text class="s-entry-arrow">›</text>
+      </view>
+    </view>
+
+    <view class="s-block">
+      <view class="s-label">本次用餐人数</view>
+      <view class="s-sizes s-sizes--8">
+        <view
+          class="s-size {{item.active ? 'is-active' : ''}}"
+          wx:for="{{people}}"
+          wx:key="value"
+          data-value="{{item.value}}"
+          bindtap="onPeopleTap"
+        >{{item.value}}</view>
+      </view>
+      <text class="s-note">{{peopleNote}}</text>
+      <view class="s-clear" wx:if="{{overridden}}" bindtap="onPeopleFollow">恢复为家庭成员数</view>
+    </view>
+
+    <view class="s-block">
+      <view class="s-label">每天通常吃几餐</view>
+      <view class="s-sizes s-sizes--5">
+        <view
+          class="s-size {{item.active ? 'is-active' : ''}}"
+          wx:for="{{meals}}"
+          wx:key="value"
+          data-value="{{item.value}}"
+          bindtap="onMealsTap"
+        >{{item.value}}</view>
+      </view>
+      <text class="s-note">{{mealsNote}}</text>
+      <text class="s-help">这一项只用来记录你的饮食习惯，不参与任何能量计算：不会拿「每日能量 ÷ 餐数」推算每餐该吃多少，也不预设每餐的能量比例。</text>
+    </view>
+
+    <view class="s-block">
+      <view class="s-label">日常饮食参考</view>
+      <text class="s-help">普通成年人每天的常识性建议，和按每位成员分别算出来的结果是两回事。</text>
+      <view class="diet-row" wx:for="{{dietList}}" wx:key="item">
+        <text class="diet-item">{{item.item}}</text>
+        <text class="diet-amount">{{item.amount}}</text>
+      </view>
+    </view>
+
+  </block>
+
+  <view class="s-boundary">屏蔽按菜谱文字做关键词匹配，只用来减少推荐；不能替代对实际食材和交叉接触风险的人工确认。</view>
+  <view class="s-boundary">三个概念不是一回事：<text class="b">每日能量参考</text>是一整天的参考量（含早餐、午餐、晚餐及其他摄入）；<text class="b">这桌菜估算</text>是按菜谱所写用量和本次主食准备量算出来的；<text class="b">实际吃进去多少，当前版本不知道</text>，也不会假装知道。菜谱用量不等于你实际买的量，也不等于实际下锅的量。</view>
+  <view class="s-boundary">营养与健康数值均为粗略估算，仅供日常参考，不构成医疗建议、诊断或处方；有疾病、孕期哺乳期或特殊饮食需求请咨询医生或注册营养师。</view>
+
+</view>

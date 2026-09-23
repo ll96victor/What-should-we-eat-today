@@ -1,0 +1,202 @@
+/* 做法详情页样式 */
+
+.d-name {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-bottom: 14rpx;
+}
+
+.d-meta {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.chip--protein { background: #ffe3d3; color: var(--protein-ink); }
+.chip--vegetable { background: #e2f3e4; color: var(--veg-ink); }
+
+.d-cat {
+  font-size: 24rpx;
+  color: var(--text-soft);
+  margin-right: 12rpx;
+}
+
+.d-desc {
+  display: block;
+  font-size: 28rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+  margin-bottom: 8rpx;
+}
+
+.d-section {
+  background: var(--surface);
+  border-radius: 24rpx;
+  padding: 26rpx 24rpx;
+  margin-top: 20rpx;
+  box-shadow: 0 8rpx 24rpx rgba(120, 80, 50, 0.08);
+}
+
+.d-h3 {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: var(--text-soft);
+  margin-bottom: 16rpx;
+}
+
+.d-li {
+  font-size: 28rpx;
+  line-height: 1.75;
+  padding: 6rpx 0;
+}
+
+.d-li--tips {
+  color: var(--text-soft);
+}
+
+/* 做法步骤：序号单独一列，长文本自然换行 */
+.d-step {
+  display: flex;
+  margin-bottom: 14rpx;
+}
+
+.d-step-no {
+  flex-shrink: 0;
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  text-align: center;
+  font-size: 22rpx;
+  border-radius: 999rpx;
+  background: #f7f1ea;
+  color: var(--text-soft);
+  margin-top: 6rpx;
+}
+
+.d-step-text {
+  flex: 1;
+  font-size: 28rpx;
+  line-height: 1.75;
+  padding-left: 16rpx;
+}
+
+/* ---------- 营养 ---------- */
+
+.nutri-none {
+  font-size: 26rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+}
+
+.nutri-box {
+  display: block;
+}
+
+.nutri-scope {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+}
+
+.nutri-kcal {
+  display: block;
+  font-size: 44rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 6rpx 0 12rpx;
+}
+
+.nutri-unit {
+  font-size: 22rpx;
+  font-weight: normal;
+  color: var(--text-soft);
+  margin-left: 4rpx;
+}
+
+.nutri-macros {
+  border-top: 2rpx solid var(--line);
+  border-bottom: 2rpx solid var(--line);
+  padding: 10rpx 0;
+  margin-bottom: 14rpx;
+}
+
+.nutri-macro {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+  padding: 4rpx 0;
+}
+
+.nm-l { color: var(--text-soft); }
+.nm-v { font-weight: 600; }
+
+.nutri-scope-note {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  line-height: 1.7;
+}
+
+.nutri-cov {
+  display: flex;
+  align-items: center;
+  margin-top: 12rpx;
+}
+
+.nutri-tag {
+  font-size: 20rpx;
+  padding: 2rpx 14rpx;
+  border-radius: 999rpx;
+  margin-right: 12rpx;
+}
+
+.nutri-tag--full { background: #e2f3e4; color: var(--veg-ink); }
+.nutri-tag--partial { background: #fdeed6; color: #a86a17; }
+.nutri-tag--none { background: #f0eae4; color: var(--text-soft); }
+
+.nutri-cov-text {
+  font-size: 22rpx;
+  color: var(--text-soft);
+}
+
+.nutri-note {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  margin-top: 6rpx;
+}
+
+/* ---------- 来源 ---------- */
+
+.d-src {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 0;
+}
+
+.d-src-name {
+  flex: 1;
+  font-size: 26rpx;
+  color: var(--text-soft);
+  margin-right: 16rpx;
+}
+
+.d-src-copy {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: var(--brand);
+  border: 2rpx solid var(--brand);
+  border-radius: 999rpx;
+  padding: 6rpx 20rpx;
+}
+
+.d-src-hint {
+  display: block;
+  font-size: 22rpx;
+  color: var(--text-soft);
+  margin-top: 12rpx;
+  line-height: 1.7;
+}
