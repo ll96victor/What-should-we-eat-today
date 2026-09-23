@@ -50,7 +50,7 @@
 
     <section class="panel" id="nutrition-panel" hidden>
       <h2 class="panel-title">
-        本餐营养估算
+        这桌菜估算
         <span class="panel-badge" id="meal-status"></span>
       </h2>
       <div class="nutri-grid" id="meal-nutri"></div>
@@ -137,8 +137,22 @@
           </section>
 
           <section class="s-block">
+            <h3 class="s-label">每天通常吃几餐</h3>
+            <div class="s-sizes s-sizes--5" id="meals-group" role="radiogroup"
+              aria-label="每天通常吃几餐"></div>
+            <p class="s-note" id="meals-note"></p>
+            <p class="s-help">
+              这一项只用来记录你的饮食习惯，不参与任何能量计算：不会拿
+              「每日能量 ÷ 餐数」推算每餐该吃多少，也不预设每餐的能量比例。
+            </p>
+          </section>
+
+          <section class="s-block">
             <h3 class="s-label">健康参考</h3>
-            <p class="s-help">按每位成员分别计算，都是粗略参考值。</p>
+            <p class="s-help">
+              按每位成员分别计算，都是粗略参考值。每人有自己的「每日能量参考」，
+              可以一位用自动估算、另一位自己设定，彼此互不影响。
+            </p>
             <div class="member-health" id="member-health"></div>
           </section>
 
@@ -151,6 +165,12 @@
 
         <p class="s-boundary">
           屏蔽按菜谱文字做关键词匹配，只用来减少推荐；不能替代对实际食材和交叉接触风险的人工确认。
+        </p>
+        <p class="s-boundary">
+          三个概念不是一回事：<strong>每日能量参考</strong>是一整天的参考量（含早餐、午餐、晚餐及其他摄入）；
+          <strong>这桌菜估算</strong>是按菜谱所写用量和本次主食准备量算出来的；
+          <strong>实际吃进去多少，当前版本不知道</strong>，也不会假装知道。
+          菜谱用量不等于你实际买的量，也不等于实际下锅的量。
         </p>
         <p class="s-boundary">
           营养与健康数值均为粗略估算，仅供日常参考，不构成医疗建议、诊断或处方；
@@ -210,6 +230,23 @@
             <span class="mf-label">活动水平</span>
             <select class="s-select" id="mf-activity"></select>
           </label>
+
+          <div class="mf-field mf-field--wide">
+            <span class="mf-label">每日能量参考</span>
+            <div class="s-sizes s-sizes--2" id="mf-energy-mode" role="radiogroup"
+              aria-label="每日能量参考的来源"></div>
+            <p class="s-note">
+              自动估算：按本人资料用公开公式算出的粗略值。<br>
+              自己设定：你自己填的数字，程序不对它做健康判断。
+              它表示的是一整天（含早餐、午餐、晚餐及其他摄入）的参考量。
+            </p>
+          </div>
+
+          <div class="mf-field mf-field--wide" id="mf-energy-manual-field" hidden>
+            <label class="mf-label" for="mf-energy-manual">自己设定的每日能量（kcal / 天）</label>
+            <input class="staple-input mf-input" id="mf-energy-manual" type="number"
+              inputmode="numeric" step="50" autocomplete="off">
+          </div>
         </div>
 
         <p class="s-err mf-err" id="mf-err" role="alert"></p>

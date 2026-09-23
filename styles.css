@@ -654,6 +654,14 @@ body.is-locked { overflow: hidden; }
 }
 
 .nutri-scope { margin: 0 0 6px; font-size: 12.5px; color: var(--text-soft); }
+
+/* 单道菜的范围说明：说清「这是整份菜谱，不是个人实际摄入」 */
+.nutri-scope-note {
+  margin: 10px 0 0;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text-soft);
+}
 .nutri-kcal { margin: 0; font-size: 28px; font-weight: 700; line-height: 1.15; }
 .nutri-kcal span { margin-left: 4px; font-size: 13px; font-weight: 500; color: var(--text-soft); }
 
@@ -881,6 +889,14 @@ body.is-locked { overflow: hidden; }
 .s-sizes--8 { grid-template-columns: repeat(4, 1fr); }
 .s-sizes--8 .s-size { min-height: 48px; font-size: 17px; }
 
+/* 每天吃几餐：5 个选项一行放得下 */
+.s-sizes--5 { grid-template-columns: repeat(5, 1fr); }
+.s-sizes--5 .s-size { min-height: 48px; font-size: 17px; }
+
+/* 两选一的来源按钮（自动估算 / 自己设定），文字比数字长，字号调小 */
+.s-sizes--2 { grid-template-columns: repeat(2, 1fr); }
+.s-size--text { font-size: 15px; font-weight: 600; }
+
 /* ---------- 健康与营养总开关 ---------- */
 
 .s-switch-row {
@@ -1021,6 +1037,44 @@ body.is-locked { overflow: hidden; }
 
 .mh-card.is-off { opacity: 0.55; }
 
+/* 每日能量参考：单独一块，和下面的 BMI / 基础代谢刻意分开，
+   避免「每天要吃的量」和「这一顿吃了多少」被读成一回事 */
+.mh-energy {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff3e9, #ffe7d5);
+}
+
+.mh-energy-label { font-size: 12.5px; font-weight: 600; color: #8a5a3b; }
+
+.mh-energy-val { font-size: 22px; font-weight: 700; color: var(--brand-dark); }
+.mh-energy-val i {
+  margin-left: 3px;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+  color: #8a5a3b;
+}
+
+.mh-energy-none { font-size: 15px; font-weight: 600; color: var(--text-soft); }
+
+.mh-energy-src {
+  margin-left: auto;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: #fff;
+  color: #8a5a3b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mh-energy-note { margin: 8px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-soft); }
+.mh-energy-note + .mh-grid { margin-top: 12px; }
+
 .mh-head {
   display: flex;
   align-items: center;
@@ -1058,6 +1112,9 @@ body.is-locked { overflow: hidden; }
 
 .mf-field { display: flex; flex-direction: column; gap: 5px; }
 .mf-field--wide { grid-column: 1 / -1; }
+
+/* display:flex 会盖掉 [hidden] 自带的 display:none（「自己设定」的输入框靠它隐藏） */
+.mf-field[hidden] { display: none; }
 .mf-label { font-size: 12.5px; color: var(--text-soft); }
 
 .mf-input {

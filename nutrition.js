@@ -305,6 +305,100 @@ export function healthMetrics(member) {
 }
 
 // ------------------------------------------------------------------
+// 每日能量参考：每位成员一份，来源可以是自动估算或用户自己设定
+// ------------------------------------------------------------------
+
+/**
+ * 两种来源必须清晰可辨，不允许混成一个数字。
+ *
+ * auto   = 用本人资料按公开公式算出的粗略值
+ * manual = 用户自己填的数字，程序不对它做任何健康判断
+ */
+export const ENERGY_SOURCE = {
+  auto: { key: 'auto', label: '自动估算' },
+  manual: { key: 'manual', label: '自己设定' },
+};
+
+/**
+ * 手动输入的**技术防呆**范围：只用来挡住明显无效的输入
+ * （多打一个 0、填成负数、误填成年份之类）。
+ *
+ * 这不是营养学标准，也不能用来判断用户设的值是否健康——
+ * 用户填多少，就按多少算。
+ */
+export const DAILY_ENERGY_LIMITS = { min: 500, max: 8000 };
+
+/**
+ * 一位成员的「每日能量参考」。
+ *
+ * 语义：**一整天 24 小时全部摄入**的参考量（含早、午、晚及其他），
+ * 不是「这一顿该吃多少」，也不是「必须吃到这个数」。
+ *
+ * 手动模式下如果数字不可用，返回 kcal = null，**不回退到自动值**：
+ * 来源一旦静默改变，用户就无法再相信这个数字是从哪来的。
+ * （正常情况下保存时已校验，这里是防御性兜底。）
+ *
+ * @returns {{mode: string, label: string, kcal: number|null, hasValue: boolean}}
+ */
+export function dailyEnergyReference(member, metrics) {
+  const mode = member?.dailyEnergyMode === 'manual' ? 'manual' : 'auto';
+  const label = ENERGY_SOURCE[mode].label;
+
+  if (mode === 'manual') {
+    const n = Number(member?.dailyEnergyManual);
+    const ok = Number.isFinite(n)
+      && n >= DAILY_ENERGY_LIMITS.min && n <= DAILY_ENERGY_LIMITS.max;
+    return { mode, label, kcal: ok ? n : null, hasValue: ok };
+  }
+
+  const kcal = Number.isFinite(metrics?.tdee) ? metrics.tdee : null;
+  return { mode, label, kcal, hasValue: kcal != null };
+}
+
+/**
+ * 以「每日能量参考」为基准的碳水 / 脂肪范围。
+ *
+ * 这两个范围本来就定义为「占总能量的百分比」，所以基准换成用户
+ * 自己设定的值以后，它们必须跟着换——否则会出现
+ * 「每日能量设 1800、碳水却按自动算出的 2300 算」的口径冲突。
+ *
+ * 只是范围参考，不是「必须吃到这个克数」。
+ * 蛋白质按体重算（见 healthMetrics.proteinG），与能量来源无关。
+ */
+export function macroRanges(dailyEnergyKcal) {
+  const kcal = Number(dailyEnergyKcal);
+  if (!Number.isFinite(kcal) || kcal <= 0) return null;
+  return {
+    // 碳水 45% – 65% 总能量；1 g 碳水 ≈ 4 kcal
+    carbsLow: (kcal * 0.45) / 4,
+    carbsHigh: (kcal * 0.65) / 4,
+    // 脂肪 20% – 35% 总能量；1 g 脂肪 ≈ 9 kcal
+    fatLow: (kcal * 0.2) / 9,
+    fatHigh: (kcal * 0.35) / 9,
+  };
+}
+
+// ------------------------------------------------------------------
+// 每天通常吃几餐
+// ------------------------------------------------------------------
+
+/**
+ * 「每天通常吃几餐」的可选值。
+ *
+ * 这个字段**只用于记录和展示饮食习惯**：
+ * 不参与计算，不做「每日能量 ÷ 餐数 = 每餐该吃多少」，
+ * 也不给 2 / 4 / 5 / 6 餐编造任何能量比例。
+ */
+export const MEALS_PER_DAY_OPTIONS = [2, 3, 4, 5, 6];
+export const MEALS_PER_DAY_DEFAULT = 3;
+
+/** 把存储里的值规范成合法餐数，不合法一律回退默认值 */
+export function normalizeMealsPerDay(value) {
+  const n = Number(value);
+  return MEALS_PER_DAY_OPTIONS.includes(n) ? n : MEALS_PER_DAY_DEFAULT;
+}
+
+// ------------------------------------------------------------------
 // 家庭成员：字段取值范围与校验
 // ------------------------------------------------------------------
 
@@ -335,6 +429,21 @@ export function validateMember(m) {
     if (!Number.isFinite(v) || v <= 0) return `请填写${lim.label}`;
     if (v < lim.min || v > lim.max) {
       return `${lim.label}请填 ${lim.min} – ${lim.max} ${lim.unit}`;
+    }
+  }
+
+  // 每日能量参考：只有「自己设定」才需要数字。
+  //
+  // 这个判断必须严格限定在 manual 分支内——老版本存下来的成员没有
+  // dailyEnergyMode 字段，一旦在这里被拒，normalizeMember() 会把整条
+  // 成员当作脏数据丢掉，用户升级后会发现家庭成员全没了。
+  if (m?.dailyEnergyMode === 'manual') {
+    const v = Number(m?.dailyEnergyManual);
+    if (!Number.isFinite(v) || v <= 0) {
+      return '请填写每日能量参考，或者改回「自动估算」';
+    }
+    if (v < DAILY_ENERGY_LIMITS.min || v > DAILY_ENERGY_LIMITS.max) {
+      return `每日能量参考请填 ${DAILY_ENERGY_LIMITS.min} – ${DAILY_ENERGY_LIMITS.max} kcal`;
     }
   }
   return null;
