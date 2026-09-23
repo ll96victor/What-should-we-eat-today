@@ -9,6 +9,14 @@
 
 ---
 
+## 在线地址
+
+**https://ll96victor.github.io/What-should-we-eat-today/**
+
+手机浏览器直接打开就能用，可以加到主屏幕当 App 用。这是 GitHub Pages 上的真实部署版本。
+
+---
+
 ## 快速开始
 
 需要 Node.js（本机已验证 v24）。在项目目录执行：
@@ -160,14 +168,17 @@ node tools/build-recipes.mjs --refresh  # 强制重新联网拉取上游最新�
 
 本项目是纯静态站点，**不需要任何构建步骤**，仓库根目录即可直接部署。
 
-### GitHub Pages
+### GitHub Pages ✅ 已部署
 
-1. 把仓库推到 GitHub。
-2. 仓库 **Settings → Pages**。
-3. Source 选 **Deploy from a branch**，分支选 `main`，目录选 **`/ (root)`**。
-4. 保存后访问 `https://<你的用户名>.github.io/What-should-we-eat-today/`。
+- 仓库：https://github.com/ll96victor/What-should-we-eat-today
+- 线上：https://ll96victor.github.io/What-should-we-eat-today/
+- 配置：Pages 来源为 `main` 分支根目录 `/`，已启用 HTTPS
 
-仓库里的 `.nojekyll` 会让 Pages 跳过 Jekyll 处理，按原样发布文件。
+采用**一套代码**，没有为 Pages 单独维护第二份。所有资源用相对路径引用
+（`styles.css`、`app.js`、`data/recipes.json`），因此放在 `/<仓库名>/` 子路径下也能正确加载；
+`.nojekyll` 让 Pages 跳过 Jekyll 处理，按原样发布文件。
+
+以后更新内容只要 `git push` 到 `main`，Pages 会自动重新构建。
 
 ### 腾讯云 CloudBase 静态托管
 
