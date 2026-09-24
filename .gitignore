@@ -14,6 +14,9 @@ node_modules/
 .tmpfiles/
 *.log
 
+# 画布工具运行时状态（cowart-selection / cowart-view-state 等本地画布状态）
+canvas/
+
 # 系统与编辑器
 .DS_Store
 Thumbs.db
