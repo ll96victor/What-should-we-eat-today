@@ -38,6 +38,13 @@ const STAPLE_PER_PERSON = 150;
 const MENU_PHRASE = { 1: '一荤一素', 2: '两荤两素', 3: '三荤三素', 4: '四荤四素' };
 
 /**
+ * 「转发给朋友」共用的文案与落地路径。
+ * 放在这里而不是各页面各写一份，避免两处标题走样。
+ */
+const SHARE_TITLE = '今天吃什么？';
+const HOME_PATH = '/pages/index/index';
+
+/**
  * 设置结构。
  *
  * 关于人数：只有**两个**事实源，且互不覆盖——
@@ -196,6 +203,8 @@ module.exports = {
   DEFAULT_DINERS,
   STAPLE_PER_PERSON,
   MENU_PHRASE,
+  SHARE_TITLE,
+  HOME_PATH,
   DEFAULT_SETTINGS,
   newMemberId,
   dedupeKeywords,

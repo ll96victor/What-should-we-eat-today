@@ -11,6 +11,7 @@
 const store = require('../../lib/store.js');
 const { estimateRecipe, STATUS_TEXT, coverageText, fmt } = require('../../lib/nutrition.js');
 const { roleLabel } = require('../../lib/menu.js');
+const { SHARE_TITLE, HOME_PATH } = require('../../lib/settings.js');
 
 Page({
   data: {
@@ -23,8 +24,12 @@ Page({
   onLoad(options) {
     this.settings = store.loadSettings();
 
+    // 转发要用：先把 id 记下来，菜名稍后从菜谱里取
+    this.recipeId = (options && options.id) || '';
+    this.recipeName = '';
+
     const app = getApp();
-    const recipe = app.findRecipe(options.id);
+    const recipe = app.findRecipe(this.recipeId);
 
     if (!recipe) {
       this.setData({ ready: true, notFound: true });
@@ -32,6 +37,7 @@ Page({
       return;
     }
 
+    this.recipeName = recipe.name;
     wx.setNavigationBarTitle({ title: recipe.name });
 
     // 营养区只在开启健康与营养时出现
@@ -92,6 +98,22 @@ Page({
       fat: fmt(est.total.fat, 1),
       coverage: coverageText(est.matched, est.totalCount),
       notes,
+    };
+  },
+
+  /**
+   * 转发给朋友（右上角「…」里的原生入口）。
+   * 路径带上这道菜的 id，对方点开看到的就是同一道菜，而不是掉回首页。
+   * 路径格式与首页 onCardTap 跳转详情页时用的完全一致。
+   * 认不出是哪道菜时退回首页——不硬造一个指向空详情的链接。
+   */
+  onShareAppMessage() {
+    if (!this.recipeId || !this.recipeName) {
+      return { title: SHARE_TITLE, path: HOME_PATH };
+    }
+    return {
+      title: `${SHARE_TITLE}试试「${this.recipeName}」`,
+      path: `/pages/detail/detail?id=${this.recipeId}`,
     };
   },
 

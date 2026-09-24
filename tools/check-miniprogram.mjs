@@ -529,6 +529,66 @@ for (const rel of PAGES) {
 }
 
 // ==================================================================
+// G. 转发给朋友（真实调用 onShareAppMessage，核对返回的标题与路径）
+// ==================================================================
+
+console.log('\nG. 转发给朋友（用假的宿主真实调用 onShareAppMessage，核对返回值）');
+
+const homeCfg = loadPageConfig('pages/index/index');
+const detailCfg = loadPageConfig('pages/detail/detail');
+
+const hasHomeShare = typeof homeCfg.onShareAppMessage === 'function';
+const hasDetailShare = typeof detailCfg.onShareAppMessage === 'function';
+
+assert('G', 'G1 pages/index/index · 定义了 onShareAppMessage', hasHomeShare,
+  hasHomeShare ? '已接线（右上角「…」里会出现「转发给朋友」）' : '缺失，转发入口不会出现');
+
+assert('G', 'G2 pages/detail/detail · 定义了 onShareAppMessage', hasDetailShare,
+  hasDetailShare ? '已接线' : '缺失，转发入口不会出现');
+
+// 真调用，而不是 grep 源码——返回值不对同样算失败
+const homeShare = hasHomeShare ? homeCfg.onShareAppMessage.call({}) : null;
+
+assert('G', 'G3 首页分享路径回到首页',
+  !!homeShare && homeShare.path === '/pages/index/index',
+  homeShare ? `path=${homeShare.path}` : '未取到返回值');
+
+assert('G', 'G4 首页分享标题是项目名',
+  !!homeShare && typeof homeShare.title === 'string' && homeShare.title.includes('今天吃什么'),
+  homeShare ? `title="${homeShare.title}"` : '未取到返回值');
+
+const shareId = sampleIds.length ? sampleIds[0].id : 'sample-id';
+const shareName = sampleIds.length ? sampleIds[0].name : '示例菜';
+
+const detailShare = hasDetailShare
+  ? detailCfg.onShareAppMessage.call({ recipeId: shareId, recipeName: shareName })
+  : null;
+
+assert('G', 'G5 详情页分享路径带上这道菜的 id',
+  !!detailShare && detailShare.path === `/pages/detail/detail?id=${shareId}`,
+  detailShare ? `id=${shareId} → path=${detailShare.path}` : '未取到返回值');
+
+assert('G', 'G6 详情页分享标题含菜名',
+  !!detailShare && typeof detailShare.title === 'string' && detailShare.title.includes(shareName),
+  detailShare ? `title="${detailShare.title}"` : '未取到返回值');
+
+const detailFallback = hasDetailShare
+  ? detailCfg.onShareAppMessage.call({ recipeId: '', recipeName: '' })
+  : null;
+
+assert('G', 'G7 详情页认不出菜谱时退回首页，不硬造参数',
+  !!detailFallback && detailFallback.path === '/pages/index/index',
+  detailFallback ? `path=${detailFallback.path}` : '未取到返回值');
+
+// 分享出去的详情路径必须和首页跳详情页用的是同一种路由格式，
+// 否则对方点开可能落到空详情。
+const indexSrcClean = stripComments(readSource('pages/index/index.js'));
+const navFormatOk = indexSrcClean.includes('/pages/detail/detail?id=${');
+assert('G', 'G8 分享路径格式与首页跳详情页一致',
+  navFormatOk && !!detailShare && detailShare.path.startsWith('/pages/detail/detail?id='),
+  navFormatOk ? '两处都用 /pages/detail/detail?id=<id>' : '未能确认首页跳转用的路径模板');
+
+// ==================================================================
 // 汇总
 // ==================================================================
 

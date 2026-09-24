@@ -10,7 +10,7 @@
 
 const store = require('../../lib/store.js');
 const {
-  MENU_PHRASE, STAPLE_PER_PERSON, effectiveDiners,
+  MENU_PHRASE, STAPLE_PER_PERSON, effectiveDiners, SHARE_TITLE, HOME_PATH,
 } = require('../../lib/settings.js');
 const {
   ROLE_EMOJI, ROLE_LABEL, rebuildAvailable, menuPlan, pickMenu, roleLabel,
@@ -121,6 +121,15 @@ Page({
 
   onOpenSettings() {
     wx.navigateTo({ url: '/pages/settings/settings' });
+  },
+
+  /**
+   * 转发给朋友（右上角「…」里的原生入口）。
+   * 落地页就是首页：这一桌菜是当场随机出来的，写进分享路径对方打开的
+   * 也不会是同一桌，与其给一个会变的期望，不如直接让对方自己摇一桌。
+   */
+  onShareAppMessage() {
+    return { title: SHARE_TITLE, path: HOME_PATH };
   },
 
   onCardTap(e) {
