@@ -266,7 +266,8 @@ E2E 脚本此前依赖「上一轮结束后恰好是干净状态」。上一轮�
       `check-nutrition-semantics.mjs` **72 条全过**
 - [x] 文档：README 顶部新增「分享给好友（免费 · 不限人数）」；
       小程序转发章节标注为**不可用 + 决策结论**；specs.md 口径冲突改为已决策
-- [ ] **CloudBase 需单独重新部署**（GitHub Pages 会随 push 自动更新，CloudBase 不会）
+- [x] **CloudBase 需单独重新部署**（GitHub Pages 会随 push 自动更新，CloudBase 不会）
+      → **已于 2026-09-28 完成**，两站点内容已一致
 
 ## 2026-09-24（体验版分发给朋友）
 
