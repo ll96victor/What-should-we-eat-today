@@ -22,8 +22,8 @@
 
 | 地址 | 说明 |
 |---|---|
-| **https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com** | 腾讯云 CloudBase（**推荐用于分享**） |
-| https://ll96victor.github.io/What-should-we-eat-today/ | GitHub Pages |
+| **https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com** | 腾讯云 CloudBase（**分享用这个**，已实测微信内可正常打开） |
+| https://ll96victor.github.io/What-should-we-eat-today/ | GitHub Pages（备用） |
 
 手机浏览器直接打开就能用，可以加到主屏幕当 App 用。
 
