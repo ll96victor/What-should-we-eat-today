@@ -91,15 +91,24 @@ const genFoods = genFoodsRaw.foods;
 assert('A', 'A1 菜谱条目数 小程序端 == 源', genRecipes.length === srcRecipes.length,
   `${genRecipes.length} / ${srcRecipes.length}`);
 
+// A2-A5、C0 一律**不写死具体数量**（用户要求 R19：日后加菜不该逼人改断言代码）。
+// 改为「产物 == 源」+「功能下限 ≥4」；需要查当前数量时以命令为准，不回填常量。
 const countRole = (list, role) => list.filter((r) => r.menuRole === role).length;
-assert('A', 'A2 荤菜池数量', countRole(genRecipes, 'protein') === 188,
-  `${countRole(genRecipes, 'protein')} 道`);
-assert('A', 'A3 素菜池数量', countRole(genRecipes, 'vegetable') === 40,
-  `${countRole(genRecipes, 'vegetable')} 道`);
+assert('A', 'A2 荤菜池数量（与源一致，且 ≥4）',
+  countRole(genRecipes, 'protein') === countRole(srcRecipes, 'protein')
+  && countRole(genRecipes, 'protein') >= 4,
+  `产物 ${countRole(genRecipes, 'protein')} 道 / 源 ${countRole(srcRecipes, 'protein')} 道`);
+assert('A', 'A3 素菜池数量（与源一致，且 ≥4）',
+  countRole(genRecipes, 'vegetable') === countRole(srcRecipes, 'vegetable')
+  && countRole(genRecipes, 'vegetable') >= 4,
+  `产物 ${countRole(genRecipes, 'vegetable')} 道 / 源 ${countRole(srcRecipes, 'vegetable')} 道`);
 
-assert('A', 'A4 食物营养表条数', genFoods.length === 123, `${genFoods.length} 条`);
-assert('A', 'A5 主食条数', genFoods.filter((f) => f.staple).length === 10,
-  `${genFoods.filter((f) => f.staple).length} 条`);
+assert('A', 'A4 食物营养表条数（与源一致）', genFoods.length === srcFoods.length,
+  `产物 ${genFoods.length} 条 / 源 ${srcFoods.length} 条`);
+assert('A', 'A5 主食条数（与源一致，且 ≥1）',
+  genFoods.filter((f) => f.staple).length === srcFoods.filter((f) => f.staple).length
+  && genFoods.filter((f) => f.staple).length >= 1,
+  `产物 ${genFoods.filter((f) => f.staple).length} 条 / 源 ${srcFoods.filter((f) => f.staple).length} 条`);
 
 assert('A', 'A6 菜谱数组与源 JSON 逐字节一致',
   JSON.stringify(genRecipes) === JSON.stringify(srcRecipes),
@@ -111,8 +120,14 @@ assert('A', 'A7 食物数组与源 JSON 逐字节一致',
 // 抽样：把生成的 data/*.js 当作真正被小程序 require 的模块加载一次
 const loadedRecipesData = require('../miniprogram/data/recipes.js');
 const loadedRecipes = asArray(loadedRecipesData);
-const sampleIds = [0, 1, 100, 200, 369].map((i) => loadedRecipes[i]).filter(Boolean);
-let sampleOk = sampleIds.length === 5;
+// 动态取样（不写死索引）：按实际长度取 首/次/中/倒二/末，去重后逐个比对。
+// 这样加菜/删菜都不需要改本脚本（R19）。
+const last = loadedRecipes.length - 1;
+const sampleIndexes = [...new Set([0, 1, Math.floor(loadedRecipes.length / 2), last - 1, last])]
+  .filter((i) => i >= 0 && i < loadedRecipes.length)
+  .sort((a, b) => a - b);
+const sampleIds = sampleIndexes.map((i) => loadedRecipes[i]).filter(Boolean);
+let sampleOk = sampleIds.length > 0 && sampleIds.length === sampleIndexes.length;
 const sampleDetail = [];
 for (const r of sampleIds) {
   const src = srcRecipes.find((x) => x.id === r.id);
@@ -120,7 +135,8 @@ for (const r of sampleIds) {
   if (!same) sampleOk = false;
   sampleDetail.push(`${r.id}:${same ? '同' : '异'}`);
 }
-assert('A', 'A8 抽样 5 道菜 require 后与源一致', sampleOk, sampleDetail.join(' '));
+assert('A', 'A8 抽样（首/次/中/倒二/末）require 后与源一致', sampleOk,
+  `取 ${sampleIds.length} 道 ｜ ` + sampleDetail.join(' '));
 
 // ==================================================================
 // B. 模块转换（ESM -> CommonJS）
@@ -197,9 +213,12 @@ const menu = require('../miniprogram/lib/menu.js');
 const pools = menu.buildPools(loadedRecipes);
 const clean = menu.rebuildAvailable(pools, []);
 
-assert('C', 'C0 两个池子的规模',
-  clean.available.protein.length === 188 && clean.available.vegetable.length === 40,
-  `荤 ${clean.available.protein.length} / 素 ${clean.available.vegetable.length}`);
+assert('C', 'C0 两个池子的规模（与源一致，且各 ≥4）',
+  clean.available.protein.length === countRole(srcRecipes, 'protein')
+  && clean.available.vegetable.length === countRole(srcRecipes, 'vegetable')
+  && clean.available.protein.length >= 4 && clean.available.vegetable.length >= 4,
+  `荤 ${clean.available.protein.length} / 素 ${clean.available.vegetable.length}`
+  + `（源 ${countRole(srcRecipes, 'protein')} / ${countRole(srcRecipes, 'vegetable')}）`);
 
 // C1 荤素始终 1:1
 let c1bad = 0;

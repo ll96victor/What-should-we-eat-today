@@ -45,8 +45,8 @@
 | 默认数量 | 2 道（1 荤 + 1 素） |
 | 可选数量 | 2 / 4 / 6 / 8，荤素**始终 1:1** |
 | 数据来源 | 项目内 `data/recipes.json`，**运行时不请求任何接口** |
-| 荤菜池 | `menuRole = protein`（肉、水产、蛋、豆腐、豆类，含肉汤） |
-| 素菜池 | `menuRole = vegetable`（以蔬菜为主料的家常素菜） |
+| 荤菜池 | `menuRole = protein`（肉、水产、蛋、豆腐、豆类，含肉汤）；**构建期已按家庭忌口裁剪 + 荤菜白名单收窄**，见 §6.7 |
+| 素菜池 | `menuRole = vegetable`（以蔬菜为主料的家常素菜）；**构建期已按家庭忌口裁剪**，见 §6.7 |
 | 组内约束 | 同一桌不出现重复的菜 |
 | 换一组 | 优先整桌换掉；池子太小时退让为「至少不完全相同」 |
 | 池子不足 | **明确报错并禁用换组**，不死循环、不返回残缺菜单、不放宽屏蔽规则 |
@@ -320,11 +320,15 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
   "version": 1,
   "generatedFrom": "https://github.com/Anduin2017/HowToCook",
   "license": "Unlicense (上游 HowToCook 项目授权)",
-  "updatedAt": "2026-09-23",
-  "stats": { "total": 370, "protein": 188, "vegetable": 40, "byRole": { /* 见下 */ } },
+  "updatedAt": "2026-10-09",
+  "stats": { "total": 257, "protein": 84, "vegetable": 39, "byRole": { /* 见下 */ } },
   "recipes": [ /* 菜谱数组 */ ]
 }
 ```
+
+> 上面的 `updatedAt` 与 `stats` 是**当前实测快照**（随加菜 / 改忌口 / 增删白名单变化），
+> 需要时以命令为准，不要在文档里回填后当成常量：
+> `node -e "console.log(require('./data/recipes.json').stats)"`
 
 单条菜谱字段：
 
@@ -346,22 +350,25 @@ currentMealHouseholdSize    = 今天来几个人（null = 跟随成员）
 | `referenceName` / `referenceUrl` | string \| null | 上游标注的参考链接 |
 | `tags` | string[] | 标签 |
 
-**`menuRole` 完整枚举**（8 个取值，当前实测数量）：
+**`menuRole` 完整枚举**（8 个取值，下列为当前实测数量快照，口径见注）：
 
 | menuRole | 数量 | 是否进随机池 |
 |---|---:|---|
-| `protein` | 188 | ✅ 荤菜池 |
-| `vegetable` | 40 | ✅ 素菜池 |
-| `staple` | 75 | ❌ |
+| `protein` | 84 | ✅ 荤菜池（构建期忌口裁剪 + 白名单收窄后） |
+| `vegetable` | 39 | ✅ 素菜池（构建期忌口裁剪后） |
+| `staple` | 68 | ❌ |
 | `dessert` | 26 | ❌ |
 | `drink` | 23 | ❌ |
 | `condiment` | 10 | ❌ |
-| `breakfast` | 7 | ❌ |
+| `breakfast` | 6 | ❌ |
 | `other` | 1 | ❌ |
 
-> 随机池只由 `protein` + `vegetable` 组成，**其余 6 类数据完整保留但不参与随机**。
+> 上表是**当前实测快照**，会随加菜 / 改忌口 / 增删白名单变化；复现命令：
+> `node -e "console.log(require('./data/recipes.json').stats.byRole)"`。
 > 归入哪一类由 `tools/build-recipes.mjs` 里一张**人工复核的修正表**决定，
-> 不是按上游目录机械映射（鸡蛋、豆腐、豆类归 `protein`）。
+> 不是按上游目录机械映射（鸡蛋、豆腐、豆类归 `protein`）。**该修正表本轮未改。**
+>
+> 随机池只由 `protein` + `vegetable` 组成，**其余 6 类数据完整保留但不参与随机**。
 
 ### 6.3 `data/foods.json`
 
@@ -520,6 +527,46 @@ buildPools(recipes)                       → { protein: [], vegetable: [] }
 `tools/build-miniprogram.mjs` 从 `data/*.json` 与 `nutrition.js` 生成，
 **不是手工维护的第二份事实源**；数据一旦变化必须重新生成，断言会拦住不一致。
 
+### 6.7 菜谱池的家庭忌口裁剪与荤菜白名单（构建期）✅
+
+**这是构建期能力，不是运行时功能。** 裁剪发生在 `node tools/build-recipes.mjs`
+生成 `data/recipes.json` 的时候；两端运行时（Web / 小程序）读到的就是裁剪后的数据，
+**运行时代码一行未改**（`app.js` / `index.html` / `styles.css` / `nutrition.js` /
+`miniprogram/**` 的逻辑与页面均无改动）。因此它与 §11 列为后续方向的
+「V3 运行时菜谱维护 / 收藏 / 偏好」不是一回事——那些是运行时 UI 功能，这里是数据管线。
+
+| 项 | 规定 |
+|---|---|
+| 忌口规则 | `data/dietary-rules.json`，**唯一事实源**；`tools/build-recipes.mjs` 内**不含任何忌口词字面量** |
+| 荤菜白名单 | `data/meat-whitelist.json`；只作用于 `protein` 池，`vegetable` 与其余 6 类不受影响 |
+| 读取语义 | **fail-closed**：文件缺失 / 不是合法 JSON / 缺必需键或缺必需分组 / 核心词表为空 → 构建**失败**并给中文原因（指明键路径）。**绝不回退成「无忌口 / 无白名单」继续构建** |
+| 匹配顺序 | 先按「字面例外」词等长屏蔽，再查排除词（顺序颠倒会误杀蚝油类约 33 道菜） |
+| 命中判定 | `name` / `ingredients` / `description` 命中 → 排除；仅 `steps` / `tips` 命中 → **保留**并进「存疑区」复核清单打印（不得静默放行） |
+| 优先级 | 强制保留 > 强制排除 > 整类排除（`aquatic`）> 词命中 |
+| 生效范围 | 全局：GitHub Pages / CloudBase / 小程序体验版同一份数据（用户已确认接受） |
+| 与运行时屏蔽词的关系 | 互不影响。`isBlocked()` 语义不变（屏蔽「鱼」仍命中「鱼香肉丝」，见 §3.4） |
+
+**数量断言不写死**（用户要求 R19：日后要持续加菜，加菜不该逼人改断言代码）：
+`tools/build-miniprogram.mjs` 与 `tools/check-miniprogram.mjs` 一律用
+「产物 == 源」+「功能下限（荤素各 ≥4）」取代绝对数量常数，加菜 / 删菜 / 扩充营养表
+都**不需要改这两个脚本**。查当前数量用命令，不要在文档里回填常量：
+
+```bash
+node -e "console.log(require('./data/recipes.json').stats)"   # 各 menuRole 数量
+node tools/build-recipes.mjs                                   # 忌口排除明细 + 存疑区清单
+```
+
+**`--refresh` 后的人工复核义务**：白名单只管荤菜，素菜池与非随机 6 类对上游新菜仍然敞开。
+`build-recipes.mjs` 会对比基线名单（`tools/.cache/last-parsed-names.json`，派生缓存、不入库）
+打印「新菜告警」；**每次 `--refresh` 后必须人工过一遍该清单**，确认新菜不含忌口食材。
+基线丢失只会退化为「一次构建不告警 + 显式提示」，不会静默。
+
+**改法（用户向）**：往 `data/dietary-rules.json` 的数组里加词，或往
+`data/meat-whitelist.json` 的「菜名」数组里加菜名，然后重跑
+`node tools/build-recipes.mjs` 与 `node tools/build-miniprogram.mjs`。写坏了构建会失败
+并用中文指出是哪个键出错，**不会静默变成「无忌口」**。想让所有荤菜都参与随机，
+把 `meat-whitelist.json` 的 `启用` 改成 `false`（这是唯一合法的关闭方式；删文件按设计等于构建失败）。
+
 ---
 
 ## 7. 设计原则
@@ -542,6 +589,10 @@ buildPools(recipes)                       → { protein: [], vegetable: [] }
 
 > 「微信小程序」原本也在这份清单里，已由 V2 实现（见第 11 章），故从此处移除；
 > 其余各项在小程序端同样没有实现。
+>
+> **边界澄清（2026-10-09 加入）**：§6.7 的「构建期忌口裁剪 + 荤菜白名单」**不属于**本节的
+> 「收藏 / 偏好」类运行时功能——它发生在**构建期**、不引入任何运行时 UI / 存储 / 接口，
+> 两端运行时代码零修改，因此不违反本节约束。
 
 家庭成员相关的额外禁止项：
 账户体系 · 云端同步 · 把成员资料上传到任何服务端
@@ -566,17 +617,23 @@ buildPools(recipes)                       → { protein: [], vegetable: [] }
 
 ## 9. 数据现状与已知局限
 
-| 项 | 现状 |
-|---|---|
-| 菜谱 | 370 道（上游 HowToCook 全量，Unlicense） |
-| 随机池 | 荤菜 188 道 / 素菜 40 道 |
-| 食物营养表 | 123 条（USDA FDC，CC0），其中 10 条标记为主食 |
-| 食材识别率 | 80.8% |
-| 菜谱营养覆盖 | 已估算 32.7% / 部分估算 63.2% / 无法估算 4.1% |
+> 下表是**当前实测快照**。这些数字会随「加菜 / 改忌口词 / 增删白名单」变化，
+> 需求时以命令输出为准，**不要把绝对值当成常量回填**。
 
-**局限 1：素菜池只有 40 道。** 一次会话（5 次换一组）遇到重复素菜约 23%，
-一周约 99.8%。经检索**没有找到第二个「授权清晰 + 含做法步骤 + 可自动整理」的中文菜谱来源**，
+| 项 | 现状（复现命令） |
+|---|---|
+| 菜谱 | 257 道（上游 HowToCook 同步 + 构建期家庭忌口裁剪 + 荤菜白名单收窄；上游 371 篇，1 篇同名重复已合并）<br>`node -e "console.log(require('./data/recipes.json').stats.total)"` |
+| 随机池 | 荤菜 84 道 / 素菜 39 道<br>`node -e "console.log(require('./data/recipes.json').stats)"` |
+| 忌口排除 | 54 道（整类 `aquatic` 28 / 词命中 23 / 强制排除 3）<br>`node tools/build-recipes.mjs` |
+| 食物营养表 | 123 条（USDA FDC，CC0），其中 10 条标记为主食<br>`node -e "const f=require('./data/foods.json').foods;console.log(f.length, f.filter(x=>x.staple).length)"` |
+| 食材识别率 | 77.9% |
+| 菜谱营养覆盖 | 已估算 28.0% / 部分估算 66.9% / 无法估算 5.1%<br>`node tools/check-nutrition.mjs` |
+
+**局限 1：素菜池只有 39 道。** 一次会话（5 次换一组）遇到重复素菜约 23.4%，
+一周（21 次）约 99.6%。经检索**没有找到第二个「授权清晰 + 含做法步骤 + 可自动整理」的中文菜谱来源**，
 按「不虚构、不复制版权不清数据」的约束保持现状。
+（素菜池由白名单只管荤菜这一分工决定：**素菜不参与白名单收窄**，只受忌口裁剪影响，
+用户已确认「一荤一素机制不变、素菜全留」。）
 
 **局限 2：约 19% 的食材认不出来。** 主要是食物表里没有的调料（豆瓣酱、花椒、味精等）
 和只写「适量」「少许」没有数字的条目。

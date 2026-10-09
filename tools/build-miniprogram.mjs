@@ -28,14 +28,14 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MP = path.join(ROOT, 'miniprogram');
 
-/** specs.md 记录的实测数量。数据重建后若不一致，必须同步 specs.md 与本表，而不是放宽断言。 */
-const EXPECTED = {
-  recipes: 370,
-  protein: 188,
-  vegetable: 40,
-  foods: 123,
-  stapleFoods: 10,
-};
+// 本脚本**不写死任何菜品/营养数量**（用户要求 R19：日后要持续加菜，加菜不该逼人改断言代码）。
+// 保留的三道防线都与「当前有多少道」无关：
+//   ① 源自洽：data/recipes.json 的 stats 必须等于数组里的真实计数 → 拦「半生成 / 损坏」；
+//   ② 功能下限：荤素各 ≥4（mealSize 最大 8，一桌要 4 荤 + 4 素才能出餐）→ 拦「池子小到无法出餐」；
+//   ③ 产物==源：读回生成的 .js 必须与源 JSON 逐字节一致 → 拦「小程序数据与 Web 数据分叉」。
+// 被移除的只有「当前数量必须等于某个写死常数」这类断言——它唯一的作用是每次数据变化都逼你改代码。
+// 需要查当前数量时以命令为准，不要回填常量：
+//   node -e "const s=require('./data/recipes.json').stats;console.log(s)"
 
 const problems = [];
 const notes = [];
@@ -103,22 +103,33 @@ function buildData() {
   const foodsData = readJson('data/foods.json');
 
   const recipes = asRecipeArray(recipesData);
-  check(recipes.length === EXPECTED.recipes,
-    `菜谱总数 ${recipes.length}（期望 ${EXPECTED.recipes}）`);
 
   const byRole = {};
   for (const r of recipes) byRole[r.menuRole] = (byRole[r.menuRole] || 0) + 1;
-  check(byRole.protein === EXPECTED.protein,
-    `荤菜池 ${byRole.protein ?? 0} 道（期望 ${EXPECTED.protein}）`);
-  check(byRole.vegetable === EXPECTED.vegetable,
-    `素菜池 ${byRole.vegetable ?? 0} 道（期望 ${EXPECTED.vegetable}）`);
+  const stats = recipesData.stats || {};
+
+  // ① 源自洽
+  check(stats.total === recipes.length,
+    `源自洽：stats.total ${stats.total} == 菜谱数组长度 ${recipes.length}`);
+  check((stats.protein ?? 0) === (byRole.protein ?? 0),
+    `源自洽：stats.protein ${stats.protein ?? 0} == 实际荤菜计数 ${byRole.protein ?? 0}`);
+  check((stats.vegetable ?? 0) === (byRole.vegetable ?? 0),
+    `源自洽：stats.vegetable ${stats.vegetable ?? 0} == 实际素菜计数 ${byRole.vegetable ?? 0}`);
+  const statsRoles = stats.byRole || {};
+  const roleKeys = new Set([...Object.keys(byRole), ...Object.keys(statsRoles)]);
+  const roleMismatch = [...roleKeys].filter((k) => byRole[k] !== statsRoles[k]);
+  check(roleMismatch.length === 0,
+    `源自洽：stats.byRole 与实际逐类计数一致（${roleKeys.size} 类）`
+    + (roleMismatch.length ? `；不一致：${roleMismatch.join(',')}` : ''));
+
+  // ② 功能下限（与「当前有多少道」无关）
+  check((byRole.protein ?? 0) >= 4, `功能下限：荤菜池 ≥4，实际 ${byRole.protein ?? 0} 道`);
+  check((byRole.vegetable ?? 0) >= 4, `功能下限：素菜池 ≥4，实际 ${byRole.vegetable ?? 0} 道`);
 
   const foods = foodsData.foods || [];
-  check(foods.length === EXPECTED.foods,
-    `食物营养表 ${foods.length} 条（期望 ${EXPECTED.foods}）`);
   const staples = foods.filter((f) => f.staple);
-  check(staples.length === EXPECTED.stapleFoods,
-    `主食 ${staples.length} 条（期望 ${EXPECTED.stapleFoods}）`);
+  check(foods.length > 0, `食物营养表非空，实际 ${foods.length} 条`);
+  check(staples.length >= 1, `功能下限：主食 ≥1 条，实际 ${staples.length} 条`);
 
   const sizeRecipes = writeOut('data/recipes.js',
     `${banner('data/recipes.json', `菜谱 ${recipes.length} 道`)}module.exports = ${toJsLiteral(recipesData)};\n`);
@@ -210,7 +221,8 @@ console.log(notes.join('\n'));
 if (problems.length) {
   console.error('\n生成失败，以下断言未通过：');
   for (const p of problems) console.error(`  FAIL ${p}`);
-  console.error('\n提示：若 data/*.json 是有意重建的，请同步更新 specs.md 与本脚本的 EXPECTED 常量。');
+  console.error('\n提示：本脚本的数量断言不写死具体数字（源自洽 + 功能下限 ≥4）。');
+  console.error('      失败通常意味着 data/recipes.json 半生成或损坏，请重跑 node tools/build-recipes.mjs。');
   process.exit(1);
 }
 

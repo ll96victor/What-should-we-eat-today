@@ -357,10 +357,316 @@ function parseRecipe({ path: relPath, text }) {
 }
 
 // ------------------------------------------------------------------
+// 忌口规则与荤菜白名单（源料文件，fail-closed 读取）
+// ------------------------------------------------------------------
+//
+// 改动前请先读这四条：
+//  1. 忌口规则只存在于 data/dietary-rules.json，本脚本内**不得出现任何忌口词字面量**。
+//     要加/减忌口，改 JSON，不改代码（验收：grep 本文件不应命中忌口词）。
+//  2. 读取一律 fail-closed：文件缺失 / JSON 坏了 / 缺键 / 核心词表为空 →
+//     打印中文原因并 exit(1)。**任何情况下不得回退成「无忌口」继续构建**——
+//     那会让全家忌口静默失效，且影响此后每一轮。
+//  3. 匹配顺序固定为「先按字面例外等长屏蔽，再查排除词」。顺序颠倒会把
+//     蚝油类约 33 道菜误杀（用户原话「蚝油可以吃一点点」）。
+//  4. 内脏类只用精确多字词（猪心/鸡心/大肠/猪肚/扇贝…），不用单字（心/肠/肚/贝），
+//     否则会误杀卷心菜、点心、腊肠、肠粉、贝果——这是实测踩出来的。
+
+const RULES_FILE = path.join(PROJECT_ROOT, 'data', 'dietary-rules.json');
+const WHITELIST_FILE = path.join(PROJECT_ROOT, 'data', 'meat-whitelist.json');
+const BASELINE_FILE = path.join(CACHE_DIR, 'last-parsed-names.json'); // 派生缓存，不入库
+
+/** 严格读 JSON：任何异常都 exit(1) 并给中文原因，绝不返回兜底值 */
+function readJsonStrict(file, label, hint) {
+  const rel = path.relative(PROJECT_ROOT, file);
+  if (!fs.existsSync(file)) {
+    console.error(`\n读取失败：找不到 ${rel}`);
+    console.error(`  ${label} 是构建的必需输入。请从仓库恢复该文件，或找 AI 说「我把${label}删了」。`);
+    console.error('  按设计，文件缺失时构建直接失败，不会当成「无忌口/无白名单」继续跑。');
+    process.exit(1);
+  }
+  let text = fs.readFileSync(file, 'utf8');
+  // BOM 容错：Windows 记事本另存可能加 BOM（这是容错，不是 fail-open）
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  let obj;
+  try {
+    obj = JSON.parse(text);
+  } catch (e) {
+    console.error(`\n读取失败：${rel} 不是合法 JSON。`);
+    console.error('  常见原因：少了逗号 / 多了逗号 / 引号没配对 / 用了中文引号。');
+    console.error(`  Node 报错位置：${e.message}`);
+    if (hint) console.error(`  ${hint}`);
+    process.exit(1);
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    console.error(`\n读取失败：${rel} 的顶层必须是一个对象 {}。`);
+    process.exit(1);
+  }
+  return obj;
+}
+
+/** 载入忌口规则；缺键 / 类型错 / 空表逐条给中文键路径后 exit(1) */
+function loadDietaryRules() {
+  const REL = path.relative(PROJECT_ROOT, RULES_FILE);
+  const rules = readJsonStrict(RULES_FILE, '忌口规则文件', '改不好就找 AI 说「我把忌口文件改坏了」。');
+  const fail = (msg) => {
+    console.error(`\n忌口规则文件有问题（${REL}）：${msg}`);
+    process.exit(1);
+  };
+  const strArray = (value, keyPath) => {
+    if (!Array.isArray(value)) fail(`「${keyPath}」必须是数组 []（现在不是）。检查是否漏了引号或逗号。`);
+    if (!value.length) fail(`「${keyPath}」是空的。这是核心词表，留空等于忌口失效，不允许。`);
+    const bad = value.find((x) => typeof x !== 'string' || !x.trim());
+    if (bad !== undefined) fail(`「${keyPath}」里有空项或非文字项：${JSON.stringify(bad)}。`);
+    return value.map((x) => x.trim());
+  };
+  const reasonMap = (value, keyPath) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      fail(`「${keyPath}」必须是一个对象（可以为空 {}，但不能缺）。`);
+    }
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v !== 'string' || !v.trim()) {
+        fail(`「${keyPath}.${k}」必须写成一条中文理由（字符串），不要写 true/false。理由是防止后来人「看着像 bug 就删」。`);
+      }
+    }
+    return value;
+  };
+
+  if (rules['版本'] === undefined) fail('缺少「版本」键。');
+  const categories = strArray(rules['整类排除'], '整类排除');
+
+  if (!rules['排除食材'] || typeof rules['排除食材'] !== 'object' || Array.isArray(rules['排除食材'])) {
+    fail('「排除食材」必须是一个对象，每个分组一个数组，例如 {"海鲜": ["鱼","虾"]}。');
+  }
+  const groups = {};
+  for (const [name, list] of Object.entries(rules['排除食材'])) {
+    groups[name] = strArray(list, `排除食材.${name}`);
+  }
+  if (!Object.keys(groups).length) fail('「排除食材」下面一个分组都没有。');
+  // 必需分组：分组名是「文件结构的一部分」，不是排除词；排除词全部在 JSON 里。
+  // 删掉整组会让该类忌口静默失效（例：删掉「海鲜」→ 全部海鲜菜回到池子），所以这里直接失败。
+  const REQUIRED_GROUPS = ['海鲜', '内脏', '血制品', '海藻'];
+  for (const name of REQUIRED_GROUPS) {
+    if (!Object.prototype.hasOwnProperty.call(groups, name)) {
+      fail(`「排除食材.${name}」这一组不见了（必需分组）。删掉整组会让该类忌口静默失效，所以构建直接失败。`);
+    }
+  }
+
+  const exceptions = rules['字面例外'];
+  if (!exceptions || typeof exceptions !== 'object' || Array.isArray(exceptions) || !Object.keys(exceptions).length) {
+    fail('「字面例外」必须是至少含一条的对象，例如 {"蚝油":"用户可以吃一点点"}。');
+  }
+  for (const [k, v] of Object.entries(exceptions)) {
+    if (typeof v !== 'string' || !v.trim()) {
+      fail(`「字面例外.${k}」必须写成一条中文理由（字符串），不要写 true/false。`);
+    }
+  }
+
+  const alertWords = strArray(rules['新菜告警词'], '新菜告警词');
+
+  return {
+    categories,
+    groups,
+    exceptions,
+    forceExclude: reasonMap(rules['强制排除的菜'], '强制排除的菜'),
+    forceKeep: reasonMap(rules['强制保留的菜'], '强制保留的菜'),
+    alertWords,
+  };
+}
+
+/** 载入荤菜白名单；缺失 / 坏 / 空 / 缺「启用」一律 exit(1) */
+function loadMeatWhitelist() {
+  const REL = path.relative(PROJECT_ROOT, WHITELIST_FILE);
+  const data = readJsonStrict(WHITELIST_FILE, '荤菜白名单文件', '改不好就找 AI 说「我把白名单文件改坏了」。');
+  const fail = (msg) => {
+    console.error(`\n荤菜白名单文件有问题（${REL}）：${msg}`);
+    console.error('  提示：想关闭白名单请把「启用」改成 false，不要删文件（删文件按设计会构建失败）。');
+    process.exit(1);
+  };
+  if (data['版本'] === undefined) fail('缺少「版本」键。');
+  if (data['启用'] === undefined) fail('缺少「启用」键（true=启用，false=所有非忌口荤菜都参与随机）。');
+  if (typeof data['启用'] !== 'boolean') {
+    fail(`「启用」必须是 true 或 false（不能带引号）。现在收到：${JSON.stringify(data['启用'])}`);
+  }
+  if (!Array.isArray(data['菜名'])) fail('「菜名」必须是数组 []。');
+  if (!data['菜名'].length) fail('「菜名」是空的。至少放几道菜进去（下限 4 道，建议 15 道以上）。');
+  const bad = data['菜名'].find((x) => typeof x !== 'string' || !x.trim());
+  if (bad !== undefined) fail(`「菜名」里有空项或非文字项：${JSON.stringify(bad)}。`);
+  return { 启用: data['启用'], 菜名: data['菜名'].map((x) => x.trim()) };
+}
+
+/** 把「字面例外」词按长度降序替换成等长空白（防「先短后长」漏屏蔽） */
+function maskExceptions(text, exceptionKeys) {
+  let out = String(text);
+  for (const k of exceptionKeys) out = out.split(k).join(' '.repeat(k.length));
+  return out;
+}
+
+// 命中即排除的字段 / 命中只进「存疑区」的字段。
+// steps/tips 常出现「也可以加点虾皮」「参考：蒸鱼豉油」「炸糊也能炸鱼」这类**可选配料与类比**，
+// 一律排除会误杀正常菜；但也不能静默放行（§6.4 教训：字面词表必然有漏网），故进人工复核清单。
+const HARD_FIELDS = ['name', 'ingredients', 'description'];
+const SOFT_FIELDS = ['steps', 'tips'];
+
+function fieldText(recipe, field) {
+  const v = recipe[field];
+  return Array.isArray(v) ? v.join('\n') : String(v || '');
+}
+
+/**
+ * 忌口过滤。优先级：强制保留 > 强制排除 > 整类排除 > 词命中。
+ * 返回 { kept, excluded, suspicious }；excluded 每条含命中字段与命中词（可审计、不静默）。
+ */
+function applyDietaryFilter(recipes, rules) {
+  const exceptionKeys = Object.keys(rules.exceptions).sort((a, b) => b.length - a.length);
+  const words = [];
+  for (const list of Object.values(rules.groups)) words.push(...list);
+  const has = (obj, k) => Object.prototype.hasOwnProperty.call(obj, k);
+
+  const hitsOf = (text) => {
+    const masked = maskExceptions(text, exceptionKeys);
+    const found = new Set();
+    for (const w of words) if (masked.includes(w)) found.add(w);
+    return [...found];
+  };
+
+  const kept = [];
+  const excluded = [];
+  const suspicious = [];
+
+  for (const r of recipes) {
+    if (has(rules.forceKeep, r.name)) { kept.push(r); continue; }
+    if (has(rules.forceExclude, r.name)) {
+      const also = HARD_FIELDS.flatMap((f) => hitsOf(fieldText(r, f)));
+      excluded.push({
+        name: r.name, menuRole: r.menuRole, layer: '强制排除',
+        hits: [], alsoByWords: also.length > 0, note: rules.forceExclude[r.name],
+      });
+      continue;
+    }
+    if (rules.categories.includes(r.category)) {
+      excluded.push({
+        name: r.name, menuRole: r.menuRole, layer: '整类排除',
+        hits: [], alsoByWords: false, note: `目录 ${r.category}`,
+      });
+      continue;
+    }
+    const hardHits = HARD_FIELDS.flatMap((f) => hitsOf(fieldText(r, f)).map((h) => `${f}:${h}`));
+    if (hardHits.length) {
+      excluded.push({ name: r.name, menuRole: r.menuRole, layer: '词命中', hits: hardHits, alsoByWords: false, note: '' });
+      continue;
+    }
+    const softHits = SOFT_FIELDS.flatMap((f) => hitsOf(fieldText(r, f)).map((h) => `${f}:${h}`));
+    kept.push(r);
+    if (softHits.length) suspicious.push({ name: r.name, hits: softHits });
+  }
+  return { kept, excluded, suspicious };
+}
+
+/** 荤菜白名单收窄：只作用于 protein 池，素菜与其他 6 类不受影响 */
+function applyWhitelist(recipes, whitelist) {
+  if (!whitelist.启用) return { kept: recipes, dropped: [] };
+  const allow = new Set(whitelist.菜名);
+  const kept = [];
+  const dropped = [];
+  for (const r of recipes) {
+    if (r.menuRole === 'protein' && !allow.has(r.name)) { dropped.push(r.name); continue; }
+    kept.push(r);
+  }
+  return { kept, dropped };
+}
+
+/**
+ * 校验集：三张表 + 白名单规模。问题**聚合后一次报完**（不要一次只报一个）；
+ * 有任何 critical 即由主流程 exit(1)。返回非阻断的告警数组。
+ */
+function validateTables({ allRecipes, filtered, whitelist, rules }) {
+  const critical = [];
+  const warnings = [];
+
+  const nameCount = new Map();
+  for (const r of allRecipes) nameCount.set(r.name, (nameCount.get(r.name) || 0) + 1);
+
+  // 1) 强制排除表：每个菜名必须恰好匹配 1 道（0=改名/写错；>1=同名重复）
+  for (const name of Object.keys(rules.forceExclude)) {
+    const n = nameCount.get(name) || 0;
+    if (n !== 1) {
+      critical.push(`「强制排除的菜.${name}」在菜谱库里匹配到 ${n} 道（必须恰好 1 道）——`
+        + (n === 0 ? '菜名写错或上游改名了。' : '库里有同名菜。'));
+    }
+  }
+  // 2) 强制保留表：必须真的在保留集里（防上游改名使保护静默失效）
+  const keptNames = new Set(filtered.kept.map((r) => r.name));
+  for (const name of Object.keys(rules.forceKeep)) {
+    if (!keptNames.has(name)) {
+      critical.push(`「强制保留的菜.${name}」不在保留集里（已被忌口排除或上游改名），这层保护已失效。`);
+    }
+  }
+
+  // 3) 白名单菜名必须存在于「过滤后的 protein 池」
+  const roleOf = new Map(allRecipes.map((r) => [r.name, r.menuRole]));
+  const filteredProtein = new Set(filtered.kept.filter((r) => r.menuRole === 'protein').map((r) => r.name));
+  const seen = new Set();
+  for (const name of whitelist.菜名) {
+    if (seen.has(name)) critical.push(`白名单里「${name}」重复出现，请去重。`);
+    seen.add(name);
+    if (filteredProtein.has(name)) continue;
+    if (!roleOf.has(name)) {
+      critical.push(`白名单里的「${name}」在菜谱库里找不到。两种可能：菜名写错字了，或上游改名了。`);
+    } else if (roleOf.get(name) !== 'protein') {
+      critical.push(`白名单里的「${name}」不是荤菜（menuRole=${roleOf.get(name)}），不能放进荤菜白名单。`);
+    } else {
+      critical.push(`白名单里的「${name}」已被忌口规则排除，不能进白名单（很可能是食材表干净、描述里藏着海鲜的菜）。`);
+    }
+  }
+
+  // 4) 白名单规模：<4 无法出餐（硬失败）；4-14 组合数偏少（大声告警）
+  //    下限 4 的由来：mealSize 最大 8，一桌需 4 道荤菜（specs §3.1 荤素 1:1）。
+  if (whitelist.启用) {
+    const n = seen.size;
+    if (n < 4) {
+      critical.push(`荤菜白名单只有 ${n} 道，低于 4 道：一桌最多 8 道菜需要 4 道荤菜，会直接出不了菜单。`);
+    } else if (n < 15) {
+      warnings.push(`荤菜白名单只有 ${n} 道（建议 15 道以上）：能组合出的菜单数偏少，容易连着吃到重复的菜。`);
+    }
+  }
+  return { critical, warnings };
+}
+
+/**
+ * 新菜告警（轻量，不阻断）。基线 = 上次成功构建的全量解析菜名，存 tools/.cache/（派生缓存，不入库）。
+ * 基线丢失只退化为「本次不告警 + 显式提示」，不会静默。
+ */
+function detectNewDishes(recipes, whitelist, rules) {
+  let baseline = null;
+  if (fs.existsSync(BASELINE_FILE)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'));
+      if (Array.isArray(parsed)) baseline = parsed;
+    } catch { baseline = null; }
+  }
+  if (!baseline) return { firstRun: true, fresh: [], watch: [], proteinOutside: [] };
+
+  const baseSet = new Set(baseline);
+  const fresh = recipes.filter((r) => !baseSet.has(r.name));
+  const watch = fresh.filter((r) => rules.alertWords.some((w) => r.name.includes(w)));
+  const allow = new Set(whitelist.菜名);
+  const proteinOutside = fresh.filter((r) => r.menuRole === 'protein' && !allow.has(r.name));
+  return { firstRun: false, fresh, watch, proteinOutside };
+}
+
+// ------------------------------------------------------------------
 // 主流程
 // ------------------------------------------------------------------
 
 const refresh = process.argv.includes('--refresh');
+
+// 规则与白名单最先载入：坏输入 fail fast，不必先跑解析/联网
+const rules = loadDietaryRules();
+const whitelist = loadMeatWhitelist();
+console.log(`· 忌口规则：词条 ${Object.values(rules.groups).reduce((a, b) => a + b.length, 0)} 个 / `
+  + `字面例外 ${Object.keys(rules.exceptions).length} 个 / 整类排除 ${rules.categories.join('、')}`);
+console.log(`· 荤菜白名单：${whitelist.启用 ? `启用，${whitelist.菜名.length} 道` : '未启用（所有非忌口荤菜都参与随机）'}`);
+
 console.log('菜谱数据构建开始');
 const sources = await loadSources(refresh);
 
@@ -368,6 +674,8 @@ let recipes = sources.map(parseRecipe).filter(Boolean);
 console.log(`· 解析成功 ${recipes.length} 道`);
 
 // 同名去重：保留食材+步骤信息更全的一份
+// （保持在过滤之前：去重后菜名唯一，「强制排除表恰好匹配 1 道」这类校验才有确定含义。
+//   实测库里有 1 组同名：陈皮排骨汤）
 const byName = new Map();
 for (const r of recipes) {
   const prev = byName.get(r.name);
@@ -382,6 +690,29 @@ for (const r of recipes) {
   byName.set(r.name, keep);
 }
 recipes = [...byName.values()];
+const parsedAll = recipes; // 过滤前的全量（供校验集与「新菜告警」基线对比）
+
+// —— 忌口过滤（只读规则文件；本脚本内无任何忌口词字面量）——
+const filtered = applyDietaryFilter(recipes, rules);
+console.log(`· 忌口过滤：保留 ${filtered.kept.length} 道，排除 ${filtered.excluded.length} 道`);
+
+// —— 校验集：三张表 + 白名单规模（问题聚合后一次报完）——
+const { critical, warnings: tableWarnings } = validateTables({ allRecipes: parsedAll, filtered, whitelist, rules });
+if (critical.length) {
+  console.error('\n构建失败：忌口规则/白名单校验未通过');
+  for (const c of critical) console.error(`  FAIL ${c}`);
+  console.error('\n提示：这些校验是为了防止「忌口静默失效」或「白名单选了不存在的菜」。');
+  console.error('      请按上面每条的中文提示修改 data/dietary-rules.json 或 data/meat-whitelist.json。');
+  process.exit(1);
+}
+
+// —— 荤菜白名单收窄（只作用于 protein 池）——
+const narrowed = applyWhitelist(filtered.kept, whitelist);
+
+// —— 新菜告警（基线对比，不阻断）——
+const newDish = detectNewDishes(parsedAll, whitelist, rules);
+
+recipes = narrowed.kept;
 
 recipes.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));
 for (const r of recipes) delete r._srcPath;
@@ -398,7 +729,13 @@ for (const r of recipes) {
 
 const protein = recipes.filter((r) => r.menuRole === 'protein');
 const vegetable = recipes.filter((r) => r.menuRole === 'vegetable');
-if (protein.length < 20) problems.push(`蛋白池过小：${protein.length}`);
+// 蛋白池阈值随白名单模式切换：白名单启用时用 15（白名单设计下限，出处：规划 §5.4 /
+// 需求梳理 §4.1 组合数表——低于 15 道会明显吃重复）；<4 已在校验集硬失败。
+// 未启用白名单时维持 20 的原语义。这不是「当前数量」断言，是「够不够出餐 + 会不会吃重复」的功能性阈值。
+const proteinWarnThreshold = whitelist.启用 ? 15 : 20;
+if (protein.length < proteinWarnThreshold) {
+  problems.push(`蛋白池过小：${protein.length}（阈值 ${proteinWarnThreshold}）`);
+}
 if (vegetable.length < 20) problems.push(`蔬菜池过小：${vegetable.length}`);
 
 // 回归保护：这些佐餐小食/主食不应出现在「一荤一素」的随机池里。
@@ -434,9 +771,46 @@ console.log(`总菜谱：${recipes.length}`);
 console.log(`随机池：蛋白类 ${protein.length} 道 / 蔬菜类 ${vegetable.length} 道`);
 console.log('各 menuRole：', JSON.stringify(roleCount, null, 0));
 console.log(`输出：${path.relative(PROJECT_ROOT, OUT_FILE)}  (${sizeKb} KB)`);
-if (problems.length) {
-  console.log(`\n告警 ${problems.length} 条：`);
-  problems.slice(0, 20).forEach((p) => console.log('  - ' + p));
+
+// —— 忌口与白名单统计（「有没有东西没被处理」必须直接可见，不静默）——
+const exByLayer = {};
+for (const e of filtered.excluded) exByLayer[e.layer] = (exByLayer[e.layer] || 0) + 1;
+const doubleGuarded = filtered.excluded.filter((e) => e.layer === '强制排除' && e.alsoByWords).length;
+const proteinBefore = filtered.kept.filter((r) => r.menuRole === 'protein').length;
+
+console.log('\n—— 忌口与白名单 ——');
+console.log(`忌口排除：${filtered.excluded.length} 道`
+  + `（整类 ${exByLayer['整类排除'] || 0} / 词命中 ${exByLayer['词命中'] || 0} / 强制排除 ${exByLayer['强制排除'] || 0}`
+  + `；其中强制排除表同时被词表命中的双保险 ${doubleGuarded} 道）`);
+if (filtered.suspicious.length) {
+  console.log(`存疑保留（steps/tips 含忌口词，需人工复核）：${filtered.suspicious.length} 道 → 清单如下`);
+  for (const s of filtered.suspicious) console.log(`  ? ${s.name}  ← ${s.hits.join(' ')}`);
+} else {
+  console.log('存疑保留（steps/tips 含忌口词，需人工复核）：0 道');
+}
+console.log(`荤菜白名单：${whitelist.启用 ? `启用，荤菜池 ${proteinBefore} → ${protein.length} 道（收窄 ${narrowed.dropped.length}）` : '未启用（荤菜池保持全部非忌口荤菜）'}`);
+if (!whitelist.启用) console.log('  ⚠️ 白名单未启用：所有非忌口荤菜都会进入随机池。');
+
+// —— 新菜告警（基线对比；首次运行显式提示，不静默）——
+if (newDish.firstRun) {
+  console.log(`新菜告警：首次运行，本次建立基线（${parsedAll.length} 道菜名），新菜告警自下次构建起生效。`);
+} else {
+  console.log(`新菜告警：${newDish.fresh.length} 道新增菜${newDish.watch.length ? `，其中 ${newDish.watch.length} 道命中告警词，请人工复核` : ''}`);
+  for (const r of newDish.watch) console.log(`  ! 新增且命中告警词：${r.name}（${r.menuRole}）`);
+  if (newDish.proteinOutside.length) {
+    console.log(`  上游新增荤菜 ${newDish.proteinOutside.length} 道，均不在白名单，未进随机池：`
+      + newDish.proteinOutside.map((r) => r.name).join('、'));
+  }
+}
+
+console.log('');
+if (problems.length || tableWarnings.length) {
+  const all = [...problems, ...tableWarnings];
+  console.log(`告警 ${all.length} 条：`);
+  all.slice(0, 20).forEach((p) => console.log('  - ' + p));
 } else {
   console.log('数据校验：通过');
 }
+
+// —— 基线最后写：失败的构建不污染「新菜告警」基线（继承「把可能失败的外部调用放在写运行态数据之前」）——
+fs.writeFileSync(BASELINE_FILE, JSON.stringify(parsedAll.map((r) => r.name)), 'utf8');
