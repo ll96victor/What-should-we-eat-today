@@ -196,7 +196,7 @@ Web 版已验证的「打开即见一桌荤素搭配的菜」需要延展到微�
 ## 成果 3 · 菜谱池「家庭忌口裁剪 + 荤菜白名单」构建期数据管线
 
 **时间**：2026-10-09
-**证据**：提交 `（见收尾报告）`；`data/dietary-rules.json`、`data/meat-whitelist.json`；
+**证据**：提交 `763b55e`；`data/dietary-rules.json`、`data/meat-whitelist.json`；
 构建实测输出（见 `answers/实施模式 - 回答 - 20261009-1749 - 第一轮忌口裁剪与荤菜白名单.md` §7）
 
 ### 问题

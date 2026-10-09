@@ -644,9 +644,9 @@ node tools/build-recipes.mjs                                   # 忌口排除明
 
 | 平台 | 状态 |
 |---|---|
-| GitHub Pages | ✅ 已部署：https://ll96victor.github.io/What-should-we-eat-today/ |
-| 腾讯云 CloudBase | ✅ 已部署并**已同步至最新**（2026-09-28）<br>https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com<br>环境 `what-should-we-eat`（ID `what-should-we-eat-d0cym0b8ea64c`，体验版），只开静态网站托管<br>⚠️ 默认测试域名**首次访问有「页面访问提示」警告页**，需点「确定访问」（同一浏览器此后不再出现） |
-| 微信小程序（V2） | ✅ 代码完成**并已真机验证**：上传版本 1.0.0 → 设为**体验版**，真实用户可扫码打开使用。<br>小程序端「转发给朋友」受**未认证**限制不可用（见第 11 节口径）。未提交审核、未发布线上、未备案。 |
+| GitHub Pages | ✅ 已部署：https://ll96victor.github.io/What-should-we-eat-today/<br>（2026-10-09 已同步「家庭忌口裁剪 + 荤菜白名单」版数据；线上抽查 `stats.total=257 / protein=84 / vegetable=39`） |
+| 腾讯云 CloudBase | ✅ 已部署并**已同步至最新**（2026-10-09 重新部署，上传失败 0）<br>https://what-should-we-eat-d0cym0b8ea64c-1256192340.tcloudbaseapp.com<br>环境 `what-should-we-eat`（ID `what-should-we-eat-d0cym0b8ea64c`，体验版），只开静态网站托管<br>⚠️ 默认测试域名**首次访问有「页面访问提示」警告页**，需点「确定访问」（同一浏览器此后不再出现） |
+| 微信小程序（V2） | ✅ 代码完成**并已真机验证**：上传版本 1.0.0 → 设为**体验版**，真实用户可扫码打开使用。<br>⚠️ **2026-10-09：小程序端数据已重建为裁剪版，但体验版仍是旧数据**——需用户在微信开发者工具重新上传并「选为体验版」后才生效（见 §6.7 与 README）。<br>小程序端「转发给朋友」受**未认证**限制不可用（见第 11 节口径）。未提交审核、未发布线上、未备案。 |
 
 ### 10.1 两个 Web 地址的取舍（2026-09-28 实测）
 
